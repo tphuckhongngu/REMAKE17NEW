@@ -6,7 +6,7 @@ from player import Player
 from bullet import Bullet
 from enemy import Enemy
 from ui import UI
-
+#test commit
 class Game:
     def __init__(self):
         pygame.init()
