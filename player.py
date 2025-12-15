@@ -16,10 +16,14 @@ class Player(pygame.sprite.Sprite):
         keys = pygame.key.get_pressed()
         self.velocity.x = 0
         self.velocity.y = 0
-        if keys[pygame.K_w]: self.velocity.y = -PLAYER_SPEED
-        if keys[pygame.K_s]: self.velocity.y = PLAYER_SPEED
-        if keys[pygame.K_a]: self.velocity.x = -PLAYER_SPEED
-        if keys[pygame.K_d]: self.velocity.x = PLAYER_SPEED
+        if keys[pygame.K_w] or keys[pygame.K_UP]:
+            self.velocity.y = -PLAYER_SPEED
+        if keys[pygame.K_s] or keys[pygame.K_DOWN]:
+            self.velocity.y = PLAYER_SPEED
+        if keys[pygame.K_a] or keys[pygame.K_LEFT]:
+            self.velocity.x = -PLAYER_SPEED
+        if keys[pygame.K_d] or keys[pygame.K_RIGHT]:
+            self.velocity.x = PLAYER_SPEED
 
     def constraint(self):
         # Giữ nhân vật trong màn hình
