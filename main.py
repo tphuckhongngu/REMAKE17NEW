@@ -7,11 +7,13 @@ from bullet import Bullet
 from enemy import Enemy
 from ui import UI
 from sounds import SoundManager
+from enemy import load_enemy_sprites # Import hàm tải ảnh của bạn
 #test commit
 class Game:
     def __init__(self):
         pygame.init()
         self.screen = pygame.display.set_mode((WIDTH, HEIGHT))
+        load_enemy_sprites() # Gọi hàm tải ảnh
         pygame.display.set_caption(TITLE)
         self.clock = pygame.time.Clock()
         self.ui = UI(self.screen)
