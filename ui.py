@@ -13,7 +13,7 @@ class UI:
         play_text = self.small_font.render("Press SPACE to PLAY", True, YELLOW)
         self.screen.blit(title, (WIDTH//2 - 200, HEIGHT//3))
         self.screen.blit(play_text, (WIDTH//2 - 150, HEIGHT//2))
-
+    #ssssssss
     def draw_game_over(self):
         self.screen.fill(BLACK)
         text = self.font.render("GAME OVER", True, RED)
