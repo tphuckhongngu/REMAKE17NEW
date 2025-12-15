@@ -14,8 +14,7 @@ class Game:
         pygame.display.set_caption(TITLE)
         self.clock = pygame.time.Clock()
         self.ui = UI(self.screen)
-        self.game_state = "MENU" # MENU, PLAYING, GAME_OVER
-        
+        self.game_state = "MENU" # MENU, PLAYING, GAME_OVER, INSTRUCTIONS
         # Sprite Groups (Quản lý nhóm đối tượng tối ưu hơn list)
         self.all_sprites = pygame.sprite.Group()
         self.bullets = pygame.sprite.Group()
@@ -39,14 +38,26 @@ class Game:
             if event.type == pygame.QUIT:
                 pygame.quit()
                 sys.exit()
-                
-            if self.game_state == "MENU" and event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_SPACE:
-                    self.new_game()
+
+            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:  # Click trái
+                mx, my = event.pos
             
-            if self.game_state == "GAME_OVER" and event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_SPACE:
-                    self.new_game()
+                if self.game_state in ["MENU", "GAME_OVER"]:
+                    buttons = self.ui.get_button_rects()
+                
+                    if buttons['restart'].collidepoint(mx, my):
+                        self.new_game()
+                    elif buttons['quit'].collidepoint(mx, my):
+                        pygame.quit()
+                        sys.exit()
+                    elif 'howto' in buttons and buttons['howto'].collidepoint(mx, my): 
+                        self.game_state = "INSTRUCTIONS" 
+
+                elif self.game_state == "INSTRUCTIONS": 
+                    self.game_state = "MENU"  # click bất kỳ để back về menu
+            if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_ESCAPE and self.game_state == "INSTRUCTIONS":
+                        self.game_state = "MENU"
 
     def update(self):
         if self.game_state == "PLAYING":
@@ -92,6 +103,8 @@ class Game:
             self.screen.fill((30, 30, 30))
             self.all_sprites.draw(self.screen)
             self.ui.draw_hud(self.player.health)
+        elif self.game_state == "INSTRUCTIONS":  
+            self.ui.draw_instructions()         
             
         pygame.display.flip()
 
