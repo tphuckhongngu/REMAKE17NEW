@@ -27,3 +27,4 @@ class Enemy(pygame.sprite.Sprite):
         if player_vector != enemy_vector: # Tránh chia cho 0
             direction = (player_vector - enemy_vector).normalize()
             self.rect.center += direction * self.speed
+#
