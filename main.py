@@ -6,6 +6,7 @@ from player import Player
 from bullet import Bullet
 from enemy import Enemy
 from ui import UI
+from sounds import SoundManager
 #test commit
 class Game:
     def __init__(self):
@@ -19,7 +20,8 @@ class Game:
         self.all_sprites = pygame.sprite.Group()
         self.bullets = pygame.sprite.Group()
         self.enemies = pygame.sprite.Group()
-        
+        SoundManager.init_mixer()  # Khởi tạo âm thanh
+        SoundManager.play_menu_music(volume=0.4) #phát nhạc ngay khi mở ứng dụng
         self.player = None
         self.spawn_timer = 0
         self.shoot_cooldown = 0
@@ -32,7 +34,8 @@ class Game:
         self.player = Player()
         self.all_sprites.add(self.player)
         self.game_state = "PLAYING"
-
+        SoundManager.stop_music()                   # Dừng nhạc menu cũ
+        SoundManager.play_background_music(volume=0.5)  # Phát nhạc chơi game
     def handle_events(self):
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -50,10 +53,10 @@ class Game:
                     elif buttons['quit'].collidepoint(mx, my):
                         pygame.quit()
                         sys.exit()
-                    elif 'howto' in buttons and buttons['howto'].collidepoint(mx, my): 
-                        self.game_state = "INSTRUCTIONS" 
+                    elif 'howto' in buttons and buttons['howto'].collidepoint(mx, my):  # ← thêm dòng này
+                        self.game_state = "INSTRUCTIONS"  # ← thêm dòng này
 
-                elif self.game_state == "INSTRUCTIONS": 
+                elif self.game_state == "INSTRUCTIONS":  # ← thêm toàn bộ elif này
                     self.game_state = "MENU"  # click bất kỳ để back về menu
             if event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_ESCAPE and self.game_state == "INSTRUCTIONS":
@@ -93,6 +96,8 @@ class Game:
                 self.player.health -= 10
                 if self.player.health <= 0:
                     self.game_state = "GAME_OVER"
+                    SoundManager.fadeout_background_music(1000)
+                    SoundManager.play_menu_music(volume=0.4)
 
     def draw(self):
         if self.game_state == "MENU":
@@ -103,8 +108,8 @@ class Game:
             self.screen.fill((30, 30, 30))
             self.all_sprites.draw(self.screen)
             self.ui.draw_hud(self.player.health)
-        elif self.game_state == "INSTRUCTIONS":  
-            self.ui.draw_instructions()         
+        elif self.game_state == "INSTRUCTIONS":  # ← thêm dòng này
+            self.ui.draw_instructions()         # ← thêm dòng này
             
         pygame.display.flip()
 
