@@ -6,12 +6,12 @@ class SoundManager:
         pygame.mixer.init(frequency=44100, size=-16, channels=2, buffer=512)
 
     def play_background_music(volume=-100000):
-        pygame.mixer.music.load('nhatnen1/background_music.mp3')
+        pygame.mixer.music.load('background_music.mp3')
         pygame.mixer.music.set_volume(volume)
         pygame.mixer.music.play(-1)
 
     def play_menu_music(volume=-10000):
-        pygame.mixer.music.load('nhatnen1/menu_music.mp3')
+        pygame.mixer.music.load('menu_music.mp3')
         pygame.mixer.music.set_volume(volume)
         pygame.mixer.music.play(-1)
 
