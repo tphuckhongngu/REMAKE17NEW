@@ -6,7 +6,7 @@ class UI:
         self.screen = screen
         self.font = pygame.font.SysFont(None, 48)
         self.small_font = pygame.font.SysFont(None, 32)
-
+        self.score = 0  # <--- QUAN TRỌNG: Thêm dòng này!
         # Load hình nền menu/game over và làm NHỎ LẠI
         original_bg = pygame.image.load('anhgd2/background_menu.png').convert_alpha()
         
@@ -83,20 +83,11 @@ class UI:
         self.screen.fill((0, 0, 0))
         self.screen.blit(self.instructions_img, self.instructions_rect)
 
-    def draw_hud(self, health):
-        hp_text = self.small_font.render(f"HP: {health}", True, WHITE)
-        self.screen.blit(hp_text, (10, 10))
 
     def draw_ingame_buttons(self):
         self.screen.blit(self.backhome_img, self.backhome_rect)
         self.screen.blit(self.pause_img, self.pause_rect)
-        self.screen.blit(self.mute_img, self.mute_rect)
-
-    button_size = 90          # Tăng lên 90 để to và dễ bấm hơn (bạn có thể thử 80, 90, 100)
-    padding = 25              # Khoảng cách từ mép phải màn hình
-    spacing = 100             # Khoảng cách giữa các nút (từ tâm đến tâm)
-
-    start_y = 30    
+        self.screen.blit(self.mute_img, self.mute_rect)  
 
     def get_button_rects(self):
         return {
@@ -111,3 +102,12 @@ class UI:
             'pause': self.pause_rect,
             'mute': self.mute_rect
         }
+    def draw_hud(self, health):
+        # Vẽ máu
+        hp_text = self.small_font.render(f"HP: {health}", True, WHITE)
+        self.screen.blit(hp_text, (10, 10))
+        
+        # Vẽ điểm số (Thêm phần này)
+        score_text = self.small_font.render(f"SCORE: {self.score}", True, YELLOW)
+        # Vẽ góc trên bên phải
+        self.screen.blit(score_text, (WIDTH - 200, 10))

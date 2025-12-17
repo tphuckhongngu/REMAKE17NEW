@@ -4,11 +4,10 @@ import math
 from settings import *
 from player import Player
 from bullet import Bullet
-from enemy import Enemy
 from ui import UI
 from events import EventHandler  
 from sounds import SoundManager
-from enemy import load_enemy_sprites 
+from enemy import Enemy, Monster2, load_enemy_sprites
 #test commit
 class Game:
     def __init__(self):
@@ -29,7 +28,7 @@ class Game:
         self.player = None
         self.spawn_timer = 0
         self.shoot_cooldown = 0
-
+        self.boss_spawned = False
     def new_game(self):
         # Reset lại game
         self.all_sprites.empty()
@@ -58,28 +57,44 @@ class Game:
                 self.all_sprites.add(bullet)
                 self.shoot_cooldown = 15
             if self.shoot_cooldown > 0: self.shoot_cooldown -= 1
-
-            # 3. Enemy Spawner
+            # 2. SPAWN QUÁI THƯỜNG (Bạn bị thiếu đoạn này)
             self.spawn_timer += 1
             if self.spawn_timer >= SPAWN_DELAY:
                 self.spawn_timer = 0
-                enemy = Enemy(self.player)
+                enemy = Enemy(self.player) # Tạo quái thường
                 self.enemies.add(enemy)
                 self.all_sprites.add(enemy)
+            # --- LOGIC SPAWN BOSS (Chỉ 1 lần) ---
+            # Ví dụ: Nếu điểm > 50 và Boss chưa ra thì gọi nó ra
+            if self.ui.score >= 50 and not self.boss_spawned:
+                boss = Monster2(self.player)
+                self.enemies.add(boss)
+                self.all_sprites.add(boss)
+                self.boss_spawned = True # Đánh dấu là đã ra rồi
 
-            # 4. Collision Detection (Va chạm)
-            # Đạn trúng quái
-            hits = pygame.sprite.groupcollide(self.enemies, self.bullets, True, True)
-            
-            # Quái chạm người
-            hits_player = pygame.sprite.spritecollide(self.player, self.enemies, True)
-            if hits_player:
-                self.player.health -= 10
-                if self.player.health <= 0:
-                    self.game_state = "GAME_OVER"
-                    SoundManager.fadeout_background_music(1000)
-                    SoundManager.play_menu_music(volume=0.4)
+            # --- LOGIC VA CHẠM ĐẠN VÀ QUÁI (SỬA LẠI) ---
+            # Thay vì dùng groupcollide(..., True, True) -> Xóa cả 2
+            # Ta dùng groupcollide(..., False, True) -> Giữ quái lại, xóa đạn
+            hits = pygame.sprite.groupcollide(self.enemies, self.bullets, False, True)
+            for enemy in hits:
+                # Mỗi viên đạn trúng trừ 1 máu
+                enemy.hp -= 1
+                if enemy.hp <= 0:
+                    self.ui.score += enemy.score_value # Lấy điểm từ con quái cộng vào UI
+                    enemy.kill() # Máu về 0 mới chết
+                    # Cộng điểm (enemy.score_value)
 
+            # --- LOGIC QUÁI CHẠM NGƯỜI (SỬA LẠI) ---
+            hits_player = pygame.sprite.spritecollide(self.player, self.enemies, False)
+            for enemy in hits_player:
+                if hasattr(enemy, 'type') and enemy.type == "boss":
+                    # Nếu là Boss thì gây sát thương và DỪNG LẠI
+                    self.player.health -= 1 # Trừ ít máu thôi vì chạm liên tục
+                    enemy.apply_stun()      # <--- Kích hoạt dừng 2s
+                else:
+                    # Quái thường thì nổ luôn
+                    self.player.health -= 10
+                    enemy.kill()
     def draw(self):
         if self.game_state == "MENU":
             self.ui.draw_menu()
