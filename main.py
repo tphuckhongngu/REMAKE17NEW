@@ -8,6 +8,8 @@ from ui import UI
 from events import EventHandler  
 from sounds import SoundManager
 from enemy import Enemy, Monster2, load_enemy_sprites
+from map_manager import MapManager
+from camera import Camera
 #test commit
 class Game:
     def __init__(self):
@@ -16,6 +18,9 @@ class Game:
         load_enemy_sprites() # Gọi hàm tải ảnh
         pygame.display.set_caption(TITLE)
         self.clock = pygame.time.Clock()
+        self.map_manager = MapManager()
+        self.map_manager.use('level1')
+        self.camera = Camera(WIDTH, HEIGHT)
         self.ui = UI(self.screen)
         self.game_state = "MENU" # MENU, PLAYING, GAME_OVER, INSTRUCTIONS
         # Sprite Groups (Quản lý nhóm đối tượng tối ưu hơn list)
@@ -46,6 +51,7 @@ class Game:
                 return
             # 1. Update sprites
             self.all_sprites.update()
+            self.camera.update(self.player)
             
             # 2. Player Shooting logic (Đưa về main hoặc để trong Player tùy ý, để đây dễ quản lý đạn hơn)
             if pygame.mouse.get_pressed()[0] and self.shoot_cooldown == 0:
@@ -101,7 +107,8 @@ class Game:
         elif self.game_state == "GAME_OVER":
             self.ui.draw_game_over()
         elif self.game_state == "PLAYING":
-            self.screen.fill((30, 30, 30))
+            self.screen.fill((30,30,30))
+            self.map_manager.draw(self.screen, self.camera)
             self.all_sprites.draw(self.screen)
             self.ui.draw_hud(self.player.health)
             self.ui.draw_ingame_buttons()
