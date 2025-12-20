@@ -30,7 +30,7 @@ def load_enemy_sprites():
             fn = f'character_frame_{i}.png'
             img = pygame.image.load(os.path.join(path_mon2, fn)).convert_alpha()
             # Quái này trâu nên cho to hơn chút (ví dụ 60x60)
-            img = pygame.transform.scale(img, (200, 165)) 
+            img = pygame.transform.scale(img, (200, 140)) 
             enemy_sprites_mon2.append(img)
         except Exception as e:
             print(f"Lỗi load mon2 frame {i}: {e}")
@@ -97,7 +97,7 @@ class Monster2(pygame.sprite.Sprite):
         if enemy_sprites_mon2:
             self.sprites = enemy_sprites_mon2
         else:
-            self.sprites = [pygame.Surface((200, 165))] # Placeholder màu tím
+            self.sprites = [pygame.Surface((200, 140))] # Placeholder màu tím
             self.sprites[0].fill((150, 0, 150))
 
         self.current_frame = 0
