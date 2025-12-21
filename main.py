@@ -109,7 +109,7 @@ class Game:
         elif self.game_state == "PLAYING":
             self.screen.fill((30,30,30))
             self.map_manager.draw(self.screen, self.camera)
-            self.all_sprites.draw(self.screen)
+            self.all_sprites.draw(self.screen)  # Vẽ player, enemy, bullet
             self.ui.draw_hud(self.player.health)
             self.ui.draw_ingame_buttons()
             if self.ui.is_paused:          
