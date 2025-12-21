@@ -34,6 +34,7 @@ class Game:
         self.spawn_timer = 0
         self.shoot_cooldown = 0
         self.boss_spawned = False
+        self.last_boss_score = 0
     def new_game(self):
         # Reset lại game
         self.all_sprites.empty()
@@ -70,13 +71,15 @@ class Game:
                 enemy = Enemy(self.player) # Tạo quái thường
                 self.enemies.add(enemy)
                 self.all_sprites.add(enemy)
-            # --- LOGIC SPAWN BOSS (Chỉ 1 lần) ---
-            # Ví dụ: Nếu điểm > 50 và Boss chưa ra thì gọi nó ra
-            if self.ui.score >= 50 and not self.boss_spawned:
+            # --- LOGIC SPAWN BOSS MỖI 100 ĐIỂM ---
+            # Nếu điểm hiện tại trừ đi mốc cũ >= 50
+            if self.ui.score - self.last_boss_score >= 100:
                 boss = Monster2(self.player)
                 self.enemies.add(boss)
                 self.all_sprites.add(boss)
-                self.boss_spawned = True # Đánh dấu là đã ra rồi
+                
+                # Cập nhật mốc điểm mới (ví dụ: đang 50 thì mốc mới là 50, khi đạt 100 sẽ spawn tiếp)
+                self.last_boss_score += 50
 
             # --- LOGIC VA CHẠM ĐẠN VÀ QUÁI (SỬA LẠI) ---
             # Thay vì dùng groupcollide(..., True, True) -> Xóa cả 2
@@ -90,17 +93,23 @@ class Game:
                     enemy.kill() # Máu về 0 mới chết
                     # Cộng điểm (enemy.score_value)
 
-            # --- LOGIC QUÁI CHẠM NGƯỜI (SỬA LẠI) ---
+            # --- XỬ LÝ VA CHẠM GIỮA NGƯỜI CHƠI VÀ QUÁI ---
+            # False ở cuối vì chúng ta muốn tự tay xử lý việc quái có biến mất hay không
             hits_player = pygame.sprite.spritecollide(self.player, self.enemies, False)
+            
             for enemy in hits_player:
+                # Kiểm tra nếu là Boss (Monster2)
                 if hasattr(enemy, 'type') and enemy.type == "boss":
-                    # Nếu là Boss thì gây sát thương và DỪNG LẠI
-                    self.player.health -= 1 # Trừ ít máu thôi vì chạm liên tục
-                    enemy.apply_stun()      # <--- Kích hoạt dừng 2s
+                    self.player.health -= 20  # Mất 20 máu
+                    enemy.kill()              # Boss biến mất ngay lập tức
                 else:
-                    # Quái thường thì nổ luôn
+                    # Logic cho quái thường (ví dụ mất 10 máu rồi quái chết)
                     self.player.health -= 10
                     enemy.kill()
+
+            # --- KIỂM TRA ĐIỀU KIỆN GAME OVER ---
+            if self.player.health <= 0:
+                self.game_state = "GAME_OVER"
     def draw(self):
         if self.game_state == "MENU":
             self.ui.draw_menu()

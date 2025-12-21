@@ -90,8 +90,6 @@ class Monster2(pygame.sprite.Sprite):
         self.score_value = 100  # Điểm cao hơn
         self.type = "boss"      
         
-        # Xử lý choáng (Stun)
-        self.stun_timer = 0     # Bộ đếm thời gian dừng
         
         # Ảnh
         if enemy_sprites_mon2:
@@ -109,10 +107,6 @@ class Monster2(pygame.sprite.Sprite):
         self.rect.center = (-100, HEIGHT // 2) # Spawn từ bên trái xa xa
         self.pos = pygame.Vector2(self.rect.center)
         self.speed = 1.5 # Đi chậm hơn quái thường tí
-
-    def apply_stun(self):
-        """Gọi hàm này khi chạm vào người chơi"""
-        self.stun_timer = 120 # 60 FPS * 2 giây = 120 frames
 
     def update(self):
         # 1. KIỂM TRA CHOÁNG
