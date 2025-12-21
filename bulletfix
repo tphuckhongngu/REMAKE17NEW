@@ -23,7 +23,7 @@ class Bullet(pygame.sprite.Sprite):
 #Đạn bay đúng hướng con trỏ chuột
 
 
-	def get_bullet_direction(player_pos):
+def get_bullet_direction(player_pos):
     mouse_x, mouse_y = pygame.mouse.get_pos()
 
     dx = mouse_x - player_pos[0]
