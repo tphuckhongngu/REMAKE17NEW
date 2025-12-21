@@ -10,6 +10,7 @@ from sounds import SoundManager
 from enemy import Enemy, Monster2, load_enemy_sprites
 from map_manager import MapManager
 from camera import Camera
+
 #test commit
 class Game:
     def __init__(self):

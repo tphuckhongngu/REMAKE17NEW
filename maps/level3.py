@@ -59,3 +59,4 @@ def get_spawns(width, height):
     # thêm một spawn đặc biệt ở trung tâm (boss)
     monsters.append((width//2, height//2))
     return {"player": player, "monsters": monsters}
+MAP = get_map(100, 50)  # Tạo list 2D tĩnh kích thước chuẩn

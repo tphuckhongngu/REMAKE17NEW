@@ -53,3 +53,4 @@ def get_spawns(width, height):
             if x < width-2:
                 monsters.append((x, y))
     return {"player": player, "monsters": monsters}
+MAP = get_map(100, 50)  # Tạo list 2D tĩnh kích thước chuẩn
