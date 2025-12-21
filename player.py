@@ -2,11 +2,11 @@ import pygame
 from settings import *
 
 class Player(pygame.sprite.Sprite):
-    def __init__(self, screen_width, screen_height):
+    def __init__(self):
         super().__init__()
         self.image = pygame.Surface((PLAYER_SIZE, PLAYER_SIZE), pygame.SRCALPHA)
         pygame.draw.circle(self.image, BLUE, (PLAYER_SIZE//2, PLAYER_SIZE//2), PLAYER_SIZE//2)
-        self.rect = self.image.get_rect(center=(screen_width//2, screen_height//2))
+        self.rect = self.image.get_rect(center=(WIDTH//2, HEIGHT//2))
         self.velocity = pygame.math.Vector2(0, 0)
         self.health = PLAYER_HP
 
@@ -24,4 +24,4 @@ class Player(pygame.sprite.Sprite):
             self.velocity.x = PLAYER_SPEED
 
     def update(self):
-        pass
+        pass  # Movement handled manually in main for collision
