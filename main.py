@@ -66,12 +66,13 @@ class Game:
         SoundManager.stop_music()
         SoundManager.play_background_music(volume=0.5)
 
-        # reset UI / score nếu cần (tùy implement UI)
-        if hasattr(self.ui, "reset"):
-            try:
-                self.ui.reset()
-            except Exception:
-                pass
+        # SỬA Ở ĐÂY: Reset điểm số trực tiếp trên đối tượng UI
+        if hasattr(self.ui, "score"):
+            self.ui.score = 0
+        else:
+            # Nếu UI chưa có biến score, ta tạo mới nó
+            self.ui.score = 0
+            
         self.spawn_timer = 0
         self.last_boss_score = 0
 
@@ -98,25 +99,18 @@ class Game:
 
         # 4) spawn quái (điều chỉnh SPAWN_DELAY trong settings)
         self.spawn_timer += 1
-        if self.spawn_timer >= SPAWN_DELAY:
+        if self.spawn_timer >= SPAWN_DELAY: # Sử dụng biến từ settings
             self.spawn_timer = 0
-            try:
-                enemy = Enemy(self.player)
-                self.enemies.add(enemy)
-                self.all_sprites.add(enemy)
-            except Exception:
-                # nếu Enemy khởi tạo khác, thay đổi ở đây
-                pass
+            new_enemy = Enemy(self.player)
+            self.enemies.add(new_enemy)
+            self.all_sprites.add(new_enemy)
 
         # 5) spawn boss theo điểm (nếu UI giữ score)
-        try:
-            if self.ui.score - self.last_boss_score >= 100:
-                boss = Monster2(self.player)
-                self.enemies.add(boss)
-                self.all_sprites.add(boss)
-                self.last_boss_score += 50
-        except Exception:
-            pass
+        if self.ui.score - self.last_boss_score >= 100: # Chỉnh từ 50 lên 100
+            boss = Monster2(self.player)
+            self.enemies.add(boss)
+            self.all_sprites.add(boss)
+            self.last_boss_score += 150
 
         # 6) va chạm đạn - quái
         hits = pygame.sprite.groupcollide(self.enemies, self.bullets, False, True)

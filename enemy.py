@@ -110,7 +110,7 @@ class Monster2(pygame.sprite.Sprite):
         self.image = self.sprites[0]
         self.rect = self.image.get_rect(center=(self.rect_center_x, self.rect_center_y))
         self.pos = pygame.Vector2(self.rect.center)
-        self.speed = 1.8
+        self.speed = 1.0
         self.animation_speed = 0.15
 
     def update(self):
