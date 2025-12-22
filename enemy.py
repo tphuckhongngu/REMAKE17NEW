@@ -86,7 +86,7 @@ class Monster2(pygame.sprite.Sprite):
     def __init__(self, player):
         super().__init__()
         self.player = player
-        self.hp = 10
+        self.hp = 6
         self.score_value = 100
         self.type = "boss"
 
