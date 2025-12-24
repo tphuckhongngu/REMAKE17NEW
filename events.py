@@ -36,26 +36,55 @@ class EventHandler:
     def handle_mouse_click(self, mx, my):
         state = self.game.game_state
 
-        if state in ["MENU", "GAME_OVER"]:
+        # =================================================
+        # 1. MENU CHÍNH (3 Nút: Play, Quit, HowTo)
+        # =================================================
+        if state == "MENU":
             buttons = self.game.ui.get_button_rects()
 
-            if buttons['restart'].collidepoint(mx, my):
+            if buttons['restart'].collidepoint(mx, my): # Nút Play
                 SoundManager.play_click_sound()
                 self.game.new_game()
 
-            elif buttons['quit'].collidepoint(mx, my):
+            elif buttons['quit'].collidepoint(mx, my):  # Nút Quit
                 SoundManager.play_click_sound()
                 pygame.quit()
                 sys.exit()
 
-            elif buttons['howto'].collidepoint(mx, my):
+            elif buttons['howto'].collidepoint(mx, my): # Nút Hướng dẫn
                 SoundManager.play_click_sound()
                 self.game.game_state = "INSTRUCTIONS"
 
+        # =================================================
+        # 2. MÀN HÌNH THUA (GAME_OVER) - (2 Nút: Quit, Restart)
+        # =================================================
+        elif state == "GAME_OVER":
+            # Lấy vị trí nút riêng của màn hình Defeat (đã viết trong UI)
+            buttons = self.game.ui.get_game_over_buttons()
+
+            if buttons['restart'].collidepoint(mx, my): # Nút Mũi tên (Chơi lại)
+                SoundManager.play_click_sound()
+                self.game.new_game()
+            # Nút Quay về Menu chính
+            elif buttons['home'].collidepoint(mx, my):
+                SoundManager.play_click_sound()
+                self.game.game_state = "MENU" # Chuyển về trạng thái Menu
+                SoundManager.play_menu_music(volume=0.4) # Bật lại nhạc menu nếu cần
+            elif buttons['quit'].collidepoint(mx, my):  # Nút X (Thoát)
+                SoundManager.play_click_sound()
+                pygame.quit()
+                sys.exit()
+
+        # =================================================
+        # 3. MÀN HÌNH HƯỚNG DẪN
+        # =================================================
         elif state == "INSTRUCTIONS":
             SoundManager.play_click_sound()
             self.game.game_state = "MENU"
 
+        # =================================================
+        # 4. ĐANG CHƠI (PLAYING) - (3 Nút góc phải)
+        # =================================================
         elif state == "PLAYING":
             ingame_buttons = self.game.ui.get_ingame_button_rects()
 

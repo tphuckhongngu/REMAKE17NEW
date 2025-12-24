@@ -228,5 +228,4 @@ class Game:
 if __name__ == "__main__":
     g = Game()
     # Start a new game immediately for quick testing (bạn có thể thay đổi)
-    g.new_game()
     g.run()
