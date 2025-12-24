@@ -45,9 +45,11 @@ def load_enemy_sprites():
 
 # --- 2. CLASS QUÁI THƯỜNG ---
 class Enemy(pygame.sprite.Sprite):
-    def __init__(self, player):
+    def __init__(self, player, map_manager=None):
         super().__init__()
         self.player = player
+        self.map_manager = map_manager
+
         self.hp = 1             
         self.score_value = 10
         self.type = "normal"    
@@ -60,69 +62,97 @@ class Enemy(pygame.sprite.Sprite):
         self.rect = self.image.get_rect()
         self.animation_speed = 0.2
 
-        side = random.choice(["top", "bottom", "left", "right"])
-        if side == "top":    start_pos = (random.randint(0, WIDTH), -50)
-        elif side == "bottom": start_pos = (random.randint(0, WIDTH), HEIGHT + 50)
-        elif side == "left":   start_pos = (-50, random.randint(0, HEIGHT))
-        else: start_pos = (WIDTH + 50, random.randint(0, HEIGHT))
-        
-        self.rect.center = start_pos
-        self.pos = pygame.Vector2(self.rect.center)
-        self.speed = ENEMY_SPEED
+        # spawn ngẫu nhiên trong map (tránh tường)
+        while True:
+            x = random.randint(2, 12) * 64
+            y = random.randint(2, 8) * 64
+            test_rect = self.rect.copy()
+            test_rect.center = (x, y)
+
+            blocked = False
+            if self.map_manager:
+                for wall in self.map_manager.collision_rects:
+                    if test_rect.colliderect(wall):
+                        blocked = True
+                        break
+
+            if not blocked:
+                self.rect.center = (x, y)
+                self.pos = pygame.Vector2(self.rect.center)
+                self.speed = ENEMY_SPEED
+                break
+
+    def move(self, dx, dy):
+        # ---- MOVE X ----
+        step_x = int(abs(dx)) + 1
+        for _ in range(step_x):
+            self.pos.x += dx / step_x
+            self.rect.centerx = int(self.pos.x)
+            if self.map_manager:
+                for wall in self.map_manager.collision_rects:
+                    if self.rect.colliderect(wall):
+                        self.pos.x -= dx / step_x
+                        self.rect.centerx = int(self.pos.x)
+                        break
+
+        # ---- MOVE Y ----
+        step_y = int(abs(dy)) + 1
+        for _ in range(step_y):
+            self.pos.y += dy / step_y
+            self.rect.centery = int(self.pos.y)
+            if self.map_manager:
+                for wall in self.map_manager.collision_rects:
+                    if self.rect.colliderect(wall):
+                        self.pos.y -= dy / step_y
+                        self.rect.centery = int(self.pos.y)
+                        break
+
+
+
 
     def update(self):
         player_vec = pygame.math.Vector2(self.player.rect.center)
         enemy_vec = pygame.math.Vector2(self.rect.center)
         direction = player_vec - enemy_vec
-        if direction.length() > 0:
-            self.pos += direction.normalize() * self.speed
-            self.rect.center = round(self.pos.x), round(self.pos.y)
+        if direction.length_squared() > 0:
+            direction = direction.normalize()
+            move_vec = direction * self.speed
+            self.move(move_vec.x, move_vec.y)
+            
         
+        # Nếu là boss, thay sprites trái/phải theo player
+        if self.type == "boss":
+            if self.player.pos.x > self.pos.x:
+                self.sprites = enemy_sprites_mon2_right
+            else:
+                self.sprites = enemy_sprites_mon2_left
+
+        # update animation frame
         self.current_frame = (self.current_frame + self.animation_speed) % len(self.sprites)
         self.image = self.sprites[int(self.current_frame)]
 
 # --- 3. CLASS MONSTER 2 (BOSS) ---
-class Monster2(pygame.sprite.Sprite):
-    def __init__(self, player):
-        super().__init__()
-        self.player = player
+class Monster2(Enemy):
+    def __init__(self, player, map_manager=None):
+        super().__init__(player, map_manager)
+
         self.hp = 6
         self.score_value = 100
         self.type = "boss"
+        self.speed = 1.0
+        self.animation_speed = 0.15
 
-        # 1. Chọn vị trí Spawn
         spawn_side = random.choice(["left", "right"])
         if spawn_side == "left":
-            self.rect_center_x = -150
-            self.sprites = enemy_sprites_mon2_right # Nhìn sang phải
+            self.sprites = enemy_sprites_mon2_right
         else:
-            self.rect_center_x = WIDTH + 150
-            self.sprites = enemy_sprites_mon2_left  # Nhìn sang trái
+            self.sprites = enemy_sprites_mon2_left
 
-        self.rect_center_y = HEIGHT // 2
-        
-        # 2. Xử lý ảnh lỗi
         if not self.sprites:
             self.sprites = [pygame.Surface((200, 140))]
             self.sprites[0].fill((150, 0, 150))
 
-        self.current_frame = 0
         self.image = self.sprites[0]
-        self.rect = self.image.get_rect(center=(self.rect_center_x, self.rect_center_y))
+        self.rect = self.image.get_rect(center=self.rect.center)
         self.pos = pygame.Vector2(self.rect.center)
-        self.speed = 1.0
-        self.animation_speed = 0.15
 
-    def update(self):
-        # Di chuyển tới người chơi
-        player_vec = pygame.math.Vector2(self.player.rect.center)
-        enemy_vec = pygame.math.Vector2(self.rect.center)
-        direction = player_vec - enemy_vec
-        
-        if direction.length() > 0:
-            self.pos += direction.normalize() * self.speed
-            self.rect.center = round(self.pos.x), round(self.pos.y)
-
-        # Cập nhật Animation
-        self.current_frame = (self.current_frame + self.animation_speed) % len(self.sprites)
-        self.image = self.sprites[int(self.current_frame)]
