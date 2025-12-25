@@ -14,6 +14,7 @@ from enemy import Enemy, Monster2, load_enemy_sprites
 from camera import Camera
 from maps.map_manager import MapManager
 from maps.complex_map import MAP_LAYOUT
+from item import HealItem
 
 # tinh chỉnh spawn (pixel)
 ENEMY_SPAWN_MIN_DIST = 200   # tối thiểu khoảng cách spawn enemy cách player (pixel)
@@ -60,6 +61,9 @@ class Game:
         # boss / score
         self.boss_spawned = False
         self.last_boss_score = 0
+        # heal items
+        self.heal_items = pygame.sprite.Group()
+        self.heal_spawn_timer = 0
 
     # ---------------- helper ----------------
     def find_free_tile_center(self, avoid_pos=None, min_dist=0):
@@ -171,6 +175,9 @@ class Game:
 
         self.spawn_timer = 0
         self.last_boss_score = 0
+        # heal items
+        self.heal_items.empty()
+        self.heal_spawn_timer = 0
 
     def update(self):
         if self.game_state != "PLAYING":
@@ -182,7 +189,7 @@ class Game:
         # update tất cả sprites
         self.all_sprites.update()
         self.bullets.update()
-
+        self.heal_items.update()
         # camera update (theo player)
         if self.player is not None:
             self.camera.update(self.player)
@@ -203,9 +210,6 @@ class Game:
         if getattr(self.ui, "score", 0) - self.last_boss_score >= 100:
             self.spawn_boss()
             self.last_boss_score += 150
-            
-           
-           
 
         # va chạm đạn - quái
         hits = pygame.sprite.groupcollide(self.enemies, self.bullets, False, True)
@@ -233,7 +237,24 @@ class Game:
                 else:
                     self.player.health -= 10
                 enemy.kill()
+        # --- Trong Game.update ---
+        self.heal_spawn_timer += 1
+        if self.heal_spawn_timer >= 10 * FPS:
+            self.heal_spawn_timer = 0
+            
+            # Sử dụng hàm find_free_tile_center để túi máu không nằm trong tường
+            spawn_pos = self.find_free_tile_center() 
+            new_heal = HealItem(spawn_pos)
+            self.heal_items.add(new_heal)
 
+        # Xử lý va chạm túi máu
+        heal_hits = pygame.sprite.spritecollide(self.player, self.heal_items, True)
+        for hit in heal_hits:
+            self.player.health += 5
+            if self.player.health > 100:
+                self.player.health = 100
+            # Chèn âm thanh hồi máu nếu có
+            # SoundManager.play_heal_sound()
         # game over
         if self.player is not None and self.player.health <= 0:
             self.game_state = "GAME_OVER"
@@ -259,7 +280,9 @@ class Game:
 
         # 1) draw map
         self.map_manager.draw(self.screen, self.camera)
-
+        # 2. Vẽ Túi máu (Dưới chân Player)
+        for item in self.heal_items:
+            self.screen.blit(item.image, self.camera.apply(item.rect))
         # 2) draw bullets (trước player để layering) with camera
         for b in self.bullets:
             try:
@@ -364,5 +387,4 @@ class Game:
 
 if __name__ == "__main__":
     g = Game()
-    g.new_game()
     g.run()
