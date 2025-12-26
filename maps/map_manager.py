@@ -5,6 +5,7 @@ TILE_SIZE = 64
 
 # Tile chặn di chuyển
 BLOCK_TILES = {"tuong",
+               "thung",
                }
 
 class MapManager:
@@ -17,7 +18,7 @@ class MapManager:
         self.load_tiles(tile_folder)
 
     def load_tiles(self, folder):
-        tile_names = ["co", "nuoc", "dat", "betong", "tuong"]
+        tile_names = ["co", "nuoc", "dat", "betong", "tuong", "thung"]
 
         for name in tile_names:
             try:
@@ -39,7 +40,8 @@ class MapManager:
                 if not alt_loaded:
                     # tile fallback nếu thiếu ảnh — dùng màu magenta rõ ràng và log
                     surf = pygame.Surface((TILE_SIZE, TILE_SIZE))
-                    surf.fill((255, 0, 255))
+                    # use neutral grey fallback instead of magenta
+                    surf.fill((120, 120, 120))
                     self.tiles[name] = surf
                     try:
                         print(f"Warning: missing tile image for '{name}' in '{folder}', using placeholder.")

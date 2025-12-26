@@ -13,7 +13,9 @@ from sounds import SoundManager
 from enemy import Enemy, Monster2, load_enemy_sprites
 from camera import Camera
 from maps.map_manager import MapManager
-from maps.complex_map import MAP_LAYOUT
+from maps import tutorial_map
+from maps import complex_map
+from npc import NPC
 from item import HealItem
 
 # tinh chỉnh spawn (pixel)
@@ -35,13 +37,56 @@ class Game:
 
         # hệ thống map, camera, UI
         self.map_manager = MapManager("tiles")
-        # gán layout cho map_manager (map lưu bên trong MapManager)
-        self.map_manager.layout = MAP_LAYOUT
-        # build collision rects từ layout
-        self.map_manager.build_collision(MAP_LAYOUT)
+        # ban đầu load map hướng dẫn (tutorial)
+        try:
+            self.map_manager.layout = tutorial_map.MAP_LAYOUT
+            self.map_manager.build_collision(tutorial_map.MAP_LAYOUT)
+            self.tutorial_mode = True
+        except Exception:
+            # fallback: load complex map if tutorial không khả dụng
+            self.map_manager.layout = complex_map.MAP_LAYOUT
+            self.map_manager.build_collision(complex_map.MAP_LAYOUT)
+            self.tutorial_mode = False
 
         self.camera = Camera(WIDTH, HEIGHT)
         self.ui = UI(self.screen)
+        # ensure a font that supports Vietnamese: prefer bundled DejaVuSans.ttf
+        import os
+        try:
+            fonts_dir = os.path.join(os.path.dirname(__file__), 'fonts')
+            os.makedirs(fonts_dir, exist_ok=True)
+            bundled = os.path.join(fonts_dir, 'DejaVuSans.ttf')
+            if not os.path.exists(bundled):
+                # try to download DejaVu Sans (OSS) if network available
+                try:
+                    from urllib.request import urlretrieve
+                    url = 'https://github.com/dejavu-fonts/dejavu-fonts/raw/master/ttf/DejaVuSans.ttf'
+                    urlretrieve(url, bundled)
+                except Exception:
+                    # ignore download failures; will fall back to system fonts
+                    pass
+
+            if os.path.exists(bundled):
+                try:
+                    self.dialog_font = pygame.font.Font(bundled, 22)
+                except Exception:
+                    self.dialog_font = pygame.font.SysFont(None, 22)
+            else:
+                # fall back to a selection of common system fonts
+                found = False
+                for name in ("segoeui", "tahoma", "arial", "dejavusans"):
+                    path = pygame.font.match_font(name)
+                    if path:
+                        try:
+                            self.dialog_font = pygame.font.Font(path, 22)
+                            found = True
+                            break
+                        except Exception:
+                            continue
+                if not found:
+                    self.dialog_font = pygame.font.SysFont(None, 22)
+        except Exception:
+            self.dialog_font = pygame.font.SysFont(None, 22)
 
         # trạng thái game
         self.game_state = "MENU"  # MENU, PLAYING, GAME_OVER, INSTRUCTIONS
@@ -50,6 +95,7 @@ class Game:
         self.all_sprites = pygame.sprite.Group()
         self.bullets = pygame.sprite.Group()
         self.enemies = pygame.sprite.Group()
+        self.npcs = pygame.sprite.Group()
 
         # event handler (nếu bạn có class này)
         self.event_handler = EventHandler(self)
@@ -57,6 +103,16 @@ class Game:
         # player và các timer
         self.player = None
         self.spawn_timer = 0
+        # tutorial / training flags
+        self.practice_started = False
+        self.tutorial_followup_done = False
+        self.training_started = False
+        self.training_spawned = False
+        self.training_completed = False
+        self.training_moved_map = False
+        # tutorial practice tracking
+        self.practice_started = False
+        self.tutorial_followup_done = False
 
         # boss / score
         self.boss_spawned = False
@@ -135,21 +191,69 @@ class Game:
         self.all_sprites.empty()
         self.bullets.empty()
         self.enemies.empty()
+        self.npcs.empty()
+        self.practice_started = False
+        self.tutorial_followup_done = False
+        self.training_started = False
+        self.training_spawned = False
+        self.training_completed = False
+        self.training_moved_map = False
 
         # debug: kiểm tra collision rects (tùy in)
         # print("collision rects:", len(self.map_manager.collision_rects))
 
-        # tìm vị trí spawn an toàn cho player
-        spawn_pos = self.find_free_tile_center(avoid_pos=None, min_dist=0)
+        # nếu đang tutorial: tạo NPC hướng dẫn trước để spawn player bên cạnh
+        if getattr(self, "tutorial_mode", False):
+            try:
+                # tạo NPC tại tile (6,5)
+                self.npc = NPC((6, 5))
+                self.npcs.add(self.npc)
+                self.all_sprites.add(self.npc)
+                # đặt vị trí spawn player ngay bên phải NPC nếu có thể
+                try:
+                    sample_img = next(iter(self.map_manager.tiles.values()))
+                    tile_size = sample_img.get_width()
+                except Exception:
+                    tile_size = 64
 
-        # tạo player, truyền group đạn để Player spawn bullet vào
-        # Player.__init__ nên chấp nhận start_pos và map_manager
-        self.player = Player(
-            bullet_group=self.bullets,
-            start_pos=spawn_pos,
-            map_manager=self.map_manager,
-            all_sprites=self.all_sprites
-        )
+                spawn_x = (self.npc.tile_x + 1) * tile_size + tile_size // 2
+                spawn_y = self.npc.tile_y * tile_size + tile_size // 2
+                spawn_pos = (spawn_x, spawn_y)
+
+                # tạo player, truyền group đạn để Player spawn bullet vào
+                self.player = Player(
+                    bullet_group=self.bullets,
+                    start_pos=spawn_pos,
+                    map_manager=self.map_manager,
+                    all_sprites=self.all_sprites
+                )
+                # bắt đầu chuỗi thoại tutorial (nội dung được quản lý trong NPC)
+                try:
+                    self.npc.start_initial_tutorial(typing_delay=2)
+                except Exception:
+                    try:
+                        self.npc.start_dialog(["chào mừng đến với buổi tập huấn ngày hôm nay!"], typing_delay=2)
+                    except Exception:
+                        pass
+            except Exception:
+                self.npc = None
+                # fallback tạo player ở nơi trống
+                spawn_pos = self.find_free_tile_center(avoid_pos=None, min_dist=0)
+                self.player = Player(
+                    bullet_group=self.bullets,
+                    start_pos=spawn_pos,
+                    map_manager=self.map_manager,
+                    all_sprites=self.all_sprites
+                )
+        else:
+            # tìm vị trí spawn an toàn cho player (bản đồ chính)
+            spawn_pos = self.find_free_tile_center(avoid_pos=None, min_dist=0)
+            self.player = Player(
+                bullet_group=self.bullets,
+                start_pos=spawn_pos,
+                map_manager=self.map_manager,
+                all_sprites=self.all_sprites
+            )
         # gán camera cho player để rotation/shoot dùng offset chính xác
         try:
             self.player.camera = self.camera
@@ -178,6 +282,20 @@ class Game:
         # heal items
         self.heal_items.empty()
         self.heal_spawn_timer = 0
+        # nếu không đặt self.npc ở trên, đảm bảo có thuộc tính
+        if not hasattr(self, 'npc'):
+            self.npc = None
+
+    def switch_to_main_map(self):
+        """Chuyển từ tutorial sang màn chính (complex_map)."""
+        try:
+            self.map_manager.layout = complex_map.MAP_LAYOUT
+            self.map_manager.build_collision(complex_map.MAP_LAYOUT)
+        except Exception:
+            return
+        self.tutorial_mode = False
+        # tạo lại player và sprite groups trên map mới
+        self.new_game()
 
     def update(self):
         if self.game_state != "PLAYING":
@@ -190,6 +308,12 @@ class Game:
         self.all_sprites.update()
         self.bullets.update()
         self.heal_items.update()
+        # update NPCs (typing effect)
+        for n in self.npcs:
+            try:
+                n.update()
+            except Exception:
+                pass
         # camera update (theo player)
         if self.player is not None:
             self.camera.update(self.player)
@@ -202,7 +326,9 @@ class Game:
         self.spawn_timer += 1
         if self.spawn_timer >= SPAWN_DELAY:
             self.spawn_timer = 0
-            self.spawn_enemy()   # gọi helper
+            # không spawn enemy khi đang tutorial
+            if not getattr(self, "tutorial_mode", False):
+                self.spawn_enemy()   # gọi helper
 
            
 
@@ -210,6 +336,74 @@ class Game:
         if getattr(self.ui, "score", 0) - self.last_boss_score >= 100:
             self.spawn_boss()
             self.last_boss_score += 150
+
+        # --- Tutorial practice detection ---
+        if getattr(self, "tutorial_mode", False) and getattr(self, 'npc', None) is not None and not self.tutorial_followup_done:
+            try:
+                # if player shot at least one bullet
+                if self.player is not None and hasattr(self.player, 'ammo'):
+                    if self.player.ammo < self.player.max_ammo:
+                        self.practice_started = True
+
+                    # detect reload completion: ammo restored to full after having started practice
+                    if self.practice_started and not getattr(self.player, 'reloading', False) and self.player.ammo == self.player.max_ammo:
+                        # ensure initial tutorial dialog finished (npc not speaking and not waiting)
+                        if not getattr(self.npc, 'is_speaking', False) and not getattr(self.npc, 'waiting_for_input', False):
+                            # show follow-up dialog once (handled by NPC)
+                            try:
+                                self.npc.start_followup_after_reload(typing_delay=2)
+                            except Exception:
+                                pass
+                            self.tutorial_followup_done = True
+            except Exception:
+                pass
+
+        # --- Start serious training after follow-up dialog finished ---
+        if getattr(self, 'tutorial_mode', False) and self.tutorial_followup_done and not self.training_started:
+            # wait until follow-up dialog fully finished (npc not speaking and not waiting)
+            if not getattr(self.npc, 'is_speaking', False) and not getattr(self.npc, 'waiting_for_input', False):
+                try:
+                    self.npc.start_training_intro(typing_delay=2)
+                except Exception:
+                    pass
+                self.training_started = True
+
+        # --- After NPC finished training intro, spawn enemies once ---
+        if self.training_started and not self.training_spawned:
+            if not getattr(self.npc, 'is_speaking', False) and not getattr(self.npc, 'waiting_for_input', False):
+                # spawn 10 mon1 and 3 mon2
+                try:
+                    for i in range(10):
+                        e = Enemy(self.player, map_manager=self.map_manager)
+                        self.enemies.add(e)
+                        self.all_sprites.add(e)
+                    for i in range(3):
+                        m = Monster2(self.player, map_manager=self.map_manager)
+                        self.enemies.add(m)
+                        self.all_sprites.add(m)
+                except Exception:
+                    pass
+                self.training_spawned = True
+
+        # --- detect training completion (all spawned enemies dead) ---
+        if self.training_spawned and not self.training_completed:
+            # if no enemies remain
+            if len(self.enemies) == 0:
+                # trigger final dialog and then move to next map
+                try:
+                    self.npc.start_training_end(typing_delay=2)
+                except Exception:
+                    pass
+                self.training_completed = True
+
+        # --- after final dialog, move to next map once dialog done ---
+        if self.training_completed and not self.training_moved_map:
+            if not getattr(self.npc, 'is_speaking', False) and not getattr(self.npc, 'waiting_for_input', False):
+                try:
+                    self.switch_to_main_map()
+                    self.training_moved_map = True
+                except Exception:
+                    pass
 
         # va chạm đạn - quái
         hits = pygame.sprite.groupcollide(self.enemies, self.bullets, False, True)
@@ -237,6 +431,18 @@ class Game:
                 else:
                     self.player.health -= 10
                 enemy.kill()
+
+        # Nếu đang ở tutorial, kiểm tra điều kiện hoàn thành: player đi tới gần mép phải map
+        if getattr(self, "tutorial_mode", False) and self.player is not None:
+            try:
+                tile_size = next(iter(self.map_manager.tiles.values())).get_width()
+            except Exception:
+                tile_size = 64
+            cols = len(self.map_manager.layout[0]) if self.map_manager.layout else 0
+            # nếu player vượt quá cột thứ cols-4 thì xem là hoàn thành tutorial
+            if self.player.rect.centerx >= (cols - 4) * tile_size:
+                # chuyển sang màn chính
+                self.switch_to_main_map()
         # --- Trong Game.update ---
         self.heal_spawn_timer += 1
         if self.heal_spawn_timer >= 10 * FPS:
@@ -313,6 +519,32 @@ class Game:
             except Exception:
                 draw_rect = s.rect
             self.screen.blit(s.image, draw_rect)
+
+        # draw NPC speech bubble above NPC (small) and dialog with a font that supports Vietnamese
+        try:
+            if getattr(self, 'npc', None) is not None:
+                # try to use Arial-like font for Vietnamese; fallback to default
+                font = getattr(self, 'dialog_font', pygame.font.SysFont(None, 22))
+
+                # draw dialog box (bottom of screen) with Vietnamese-capable font
+                try:
+                    self.npc.draw_dialog(self.screen, self.dialog_font if hasattr(self, 'dialog_font') else font, (WIDTH, HEIGHT))
+                    # show hint to press Enter to continue while dialog active or queued
+                    try:
+                        if getattr(self.npc, 'is_speaking', False) or (getattr(self.npc, 'dialog_queue', None) and len(self.npc.dialog_queue) > 0):
+                            hint = "Nhấn Enter để tiếp tục"
+                            hint_font = self.dialog_font if hasattr(self, 'dialog_font') else font
+                            hint_surf = hint_font.render(hint, True, (220, 220, 220))
+                            hint_r = hint_surf.get_rect()
+                            # position above right of dialog box
+                            hint_r.bottomright = (WIDTH - 30, HEIGHT - 30)
+                            self.screen.blit(hint_surf, hint_r)
+                    except Exception:
+                        pass
+                except Exception:
+                    pass
+        except Exception:
+            pass
 
         # 4) UI + ammo
         try:

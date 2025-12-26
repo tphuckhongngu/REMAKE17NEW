@@ -32,6 +32,13 @@ class EventHandler:
                     elif self.game.game_state == "PLAYING":
                         SoundManager.play_click_sound()
                         self.game.ui.is_paused = not self.game.ui.is_paused
+                # advance dialog with Enter / Return
+                if event.key in (pygame.K_RETURN, pygame.K_KP_ENTER):
+                    try:
+                        if getattr(self.game, 'npc', None) is not None:
+                            self.game.npc.advance()
+                    except Exception:
+                        pass
 
     def handle_mouse_click(self, mx, my):
         state = self.game.game_state
