@@ -432,6 +432,7 @@ class Game:
         if self.player is not None:
             hits_player = pygame.sprite.spritecollide(self.player, self.enemies, False)
             for enemy in hits_player:
+                SoundManager.play_hurt_sound()
                 if getattr(enemy, "type", "") == "boss":
                     self.player.health -= 20
                 else:

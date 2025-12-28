@@ -16,6 +16,7 @@ class SoundManager:
     reload_channel = None
     initialized = False
     begin_sound = None
+    hurt_sound = None
 
     @staticmethod
     def init_mixer():
@@ -57,9 +58,15 @@ class SoundManager:
         try:
             # Lưu ý: Bạn nói folder là 'soundeffect', hãy kiểm tra lại đường dẫn
             SoundManager.begin_sound = pygame.mixer.Sound(sound_path("soundeffect/soundbegin.mp3"))
-            SoundManager.begin_sound.set_volume(0.7)
+            SoundManager.begin_sound.set_volume(1.1)
         except Exception as e:
             print("Can't load soundbegin:", e)
+
+        try:
+            SoundManager.hurt_sound = pygame.mixer.Sound(sound_path("soundeffect/hurt.mp3"))
+            SoundManager.hurt_sound.set_volume(0.9)
+        except Exception as e:
+            print("Can't load hurt.mp3:", e)
     # --- music helpers (unchanged) ---
     @staticmethod
     def play_begin_sound():
@@ -158,3 +165,8 @@ class SoundManager:
             click_sound.play()
         except Exception as e:
             print("Loi load click sound:", e)
+    @staticmethod
+    def play_hurt_sound():
+        if SoundManager.hurt_sound:
+            if not pygame.mixer.Channel(6).get_busy(): 
+                pygame.mixer.Channel(6).play(SoundManager.hurt_sound)
