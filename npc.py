@@ -154,28 +154,28 @@ class NPC(pygame.sprite.Sprite):
     # ---- higher-level scripted dialogs ----
     def start_initial_tutorial(self, typing_delay=2):
         lines = [
-            "Hôm nay lại có thằng muốn ch*t đến huấn luyện à!",
-            "Điều khiển nhân vật của mày bằng phím WASD hoặc phím mũi tên. Nhấp chuột vào màn hình để bắn đạn! Nhưng nhớ rằng mày chỉ bắn được 15 viên liên tục thôi, sau đó phải nạp đạn — Liệu hồn mà dùng cẩn thận đấy, nếu mày không muốn ch*t sớm!"
+            "Hôm nay lại có một chiến binh đến huấn luyện à!",
+            "Điều khiển nhân vật của bạn bằng phím WASD hoặc phím mũi tên. Nhấp chuột vào màn hình để bắn đạn! Nhưng nhớ rằng bạn chỉ bắn được 15 viên liên tục thôi, sau đó phải nạp đạn — hãy cẩn thận trong những tình huống nguy hiểm!"
         ]
         self.start_dialog(lines, typing_delay=typing_delay)
 
     def start_followup_after_reload(self, typing_delay=2):
         lines = [
-            "Thằng này được!",
-            "Luôn nhớ rằng mày chỉ có 100hp mà thôi, khi hết hp thì đời mày tàn!.",
-            "Quân cứu trợ có đặt bình thuốc trên chiến trường, lụm được thì mày sống thêm một tí đấy!."
+            "làm tốt lắm chiến binh!",
+            "Luôn nhớ rằng bạn chỉ có 100hp mà thôi, khi hết hp thì bạn sẽ gặp nguy hiểm!.",
+            "Quân cứu trợ có đặt bình thuốc trên chiến trường, hãy nhặt nó bạn sẽ có thêm cơ hội sống!."
         ]
         self.start_dialog(lines, typing_delay=typing_delay)
 
     def start_training_intro(self, typing_delay=2):
         lines = [
-            "Bây giờ thể hiện những gì mày có đi!",
-            "Hãy tiêu diệt hết tất cả bọn quái vật này để chứng minh mày đủ sức để giải cứu thế giới tan hoang này!"
+            "Bây giờ thể hiện những gì bạn có đi!",
+            "Hãy tiêu diệt hết tất cả bọn quái vật này để chứng minh bạn đủ sức để giải cứu thế giới tan hoang này!"
         ]
         self.start_dialog(lines, typing_delay=typing_delay)
 
     def start_training_end(self, typing_delay=2):
-        lines = ["Mày đã hoàn thành huấn luyện cơ bản rồi đấy, đừng hẹo sớm nhé người anh em, tao không muốn phải chôn x*c mày đâu!"]
+        lines = ["bạn đã hoàn thành huấn luyện cơ bản rồi đấy, hãy cẩn thận nhé người anh em, chúng ta sẽ còn gặp lại!"]
         self.start_dialog(lines, typing_delay=typing_delay)
 
     def is_busy(self):
