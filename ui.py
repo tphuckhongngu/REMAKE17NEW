@@ -17,10 +17,12 @@ class UI:
 
         # ==========================================
         # 1. LOAD ẢNH MENU CHÍNH
+        original_menu_bg = load_img('anhgd2', 'nentrencung.png')
+        self.deep_menu_background = pygame.transform.scale(original_menu_bg, (WIDTH, HEIGHT))
         # ==========================================
         # Background
         original_bg = load_img('anhgd2', 'background_menu.png')
-        scale_factor = 1.5
+        scale_factor = 2.0
         new_width = int(original_bg.get_width() * scale_factor)
         new_height = int(original_bg.get_height() * scale_factor)
         self.bg_image = pygame.transform.scale(original_bg, (new_width, new_height))
@@ -94,11 +96,17 @@ class UI:
     # ================= DRAW FUNCTIONS =================
 
     def draw_menu(self):
-        self.screen.fill((0, 0, 0))
+        # 1. Vẽ nền sâu nhất (phải dùng đúng tên: self.deep_menu_background)
+        self.screen.blit(self.deep_menu_background, (0, 0))
+
+        # 2. Vẽ khung gỗ cũ
         self.screen.blit(self.bg_image, self.bg_rect)
+
+        # 3. Vẽ nút
         self.screen.blit(self.restart_img, self.restart_rect)
         self.screen.blit(self.quit_img, self.quit_rect)
         self.screen.blit(self.howto_img, self.howto_rect)
+
 
     def draw_instructions(self):
         if not self.showing_instructions:
@@ -107,7 +115,6 @@ class UI:
         # Vẽ slide hiện tại full màn hình
         self.screen.blit(self.instruction_slides[self.current_slide], (0, 0))
 
-        # Hint nhỏ (tùy chọn - nếu không muốn thì comment/xóa 4 dòng dưới)
 
     def draw_ingame_buttons(self):
         self.screen.blit(self.backhome_img, self.backhome_rect)
