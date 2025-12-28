@@ -61,7 +61,10 @@ class EventHandler:
             elif buttons['howto'].collidepoint(mx, my): # Nút Hướng dẫn
                 SoundManager.play_click_sound()
                 self.game.game_state = "INSTRUCTIONS"
-
+        elif state == "INSTRUCTIONS":
+            SoundManager.play_click_sound()
+            if self.game.ui.next_slide():               # Click bất kỳ → chuyển slide
+                    self.game.game_state = "MENU"
         # =================================================
         # 2. MÀN HÌNH THUA (GAME_OVER) - (2 Nút: Quit, Restart)
         # =================================================
