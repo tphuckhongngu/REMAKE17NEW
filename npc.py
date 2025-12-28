@@ -154,7 +154,8 @@ class NPC(pygame.sprite.Sprite):
     # ---- higher-level scripted dialogs ----
     def start_initial_tutorial(self, typing_delay=2):
         lines = [
-            "Hôm nay lại có một chiến binh đến huấn luyện à!",
+            "Hôm nay lại có chiến binh đến huấn luyện? Hãy cố gắng luyện tập sau đó ra chiến trường Nếu chúng ta thất bại, Trái Đất sẽ không còn cơ hội thứ hai.",
+            "Những sinh vật kia từng là động vật bình thường… ô nhiễm đã biến chúng thành quái vật. Mỗi con quái vật bị tiêu diệt là môi trường được thanh lọc thêm một chút.",
             "Điều khiển nhân vật của bạn bằng phím WASD hoặc phím mũi tên. Nhấp chuột vào màn hình để bắn đạn! Nhưng nhớ rằng bạn chỉ bắn được 15 viên liên tục thôi, sau đó phải nạp đạn — hãy cẩn thận trong những tình huống nguy hiểm!"
         ]
         self.start_dialog(lines, typing_delay=typing_delay)
