@@ -47,8 +47,7 @@ class EventHandler:
         # 1. MENU CHÍNH (3 Nút: Play, Quit, HowTo)
         # =================================================
         if state == "MENU":
-            buttons = self.game.ui.get_button_rects()
-
+            buttons = self.game.ui.get_menu_button_rects()
             if buttons['restart'].collidepoint(mx, my): # Nút Play
                 SoundManager.play_click_sound()
                 self.game.new_game()
@@ -62,11 +61,17 @@ class EventHandler:
                 SoundManager.play_click_sound()
                 self.game.game_state = "INSTRUCTIONS"
                 self.game.ui.start_instructions()
+            elif buttons['highscore'].collidepoint(mx, my):   # ← THÊM MỚI
+                SoundManager.play_click_sound()
+                self.game.game_state = "HIGHSCORE"
+        
         elif state == "INSTRUCTIONS":
             SoundManager.play_click_sound()
             if self.game.ui.next_slide():               # Click bất kỳ → chuyển slide
                     self.game.game_state = "MENU"
-                    
+        elif state == "HIGHSCORE":
+            SoundManager.play_click_sound()
+            self.game.game_state = "MENU"        
         # =================================================
         # 2. MÀN HÌNH THUA (GAME_OVER) - (2 Nút: Quit, Restart)
         # =================================================
