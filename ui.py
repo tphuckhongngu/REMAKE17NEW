@@ -17,6 +17,8 @@ class UI:
 
         # ==========================================
         # 1. LOAD ẢNH MENU CHÍNH
+        original_menu_bg = load_img('anhgd2', 'nentrencung.png')
+        self.deep_menu_background = pygame.transform.scale(original_menu_bg, (WIDTH, HEIGHT))
         # ==========================================
         # Background
         original_bg = load_img('anhgd2', 'background_menu.png')
@@ -94,11 +96,17 @@ class UI:
     # ================= DRAW FUNCTIONS =================
 
     def draw_menu(self):
-        self.screen.fill((0, 0, 0))
+        # 1. Vẽ nền sâu nhất (phải dùng đúng tên: self.deep_menu_background)
+        self.screen.blit(self.deep_menu_background, (0, 0))
+
+        # 2. Vẽ khung gỗ cũ
         self.screen.blit(self.bg_image, self.bg_rect)
+
+        # 3. Vẽ nút
         self.screen.blit(self.restart_img, self.restart_rect)
         self.screen.blit(self.quit_img, self.quit_rect)
         self.screen.blit(self.howto_img, self.howto_rect)
+
 
     def draw_instructions(self):
         if not self.showing_instructions:
