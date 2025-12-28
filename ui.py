@@ -22,7 +22,7 @@ class UI:
         # ==========================================
         # Background
         original_bg = load_img('anhgd2', 'background_menu.png')
-        scale_factor = 1.5
+        scale_factor = 2.0
         new_width = int(original_bg.get_width() * scale_factor)
         new_height = int(original_bg.get_height() * scale_factor)
         self.bg_image = pygame.transform.scale(original_bg, (new_width, new_height))
@@ -115,7 +115,6 @@ class UI:
         # Vẽ slide hiện tại full màn hình
         self.screen.blit(self.instruction_slides[self.current_slide], (0, 0))
 
-        # Hint nhỏ (tùy chọn - nếu không muốn thì comment/xóa 4 dòng dưới)
 
     def draw_ingame_buttons(self):
         self.screen.blit(self.backhome_img, self.backhome_rect)
