@@ -122,6 +122,9 @@ class Game:
         self.heal_spawn_timer = 0
         # play begin sound only once
         self.has_played_begin_sound = False
+        # damage flash
+        self.hit_timer = 0  # Thời gian còn lại để nhấp nháy
+        self.flash_duration = 200 # Nhấp nháy trong 200ms (0.2 giây)
     # ---------------- helper ----------------
     def find_free_tile_center(self, avoid_pos=None, min_dist=0):
         """
@@ -298,7 +301,9 @@ class Game:
         self.tutorial_mode = False
         # tạo lại player và sprite groups trên map mới
         self.new_game()
-
+    def trigger_hit_effect(self):
+        """Gọi hàm này mỗi khi bị quái chạm"""
+        self.hit_timer = pygame.time.get_ticks()
     def update(self):
         if self.game_state != "PLAYING":
             return
@@ -433,6 +438,10 @@ class Game:
             hits_player = pygame.sprite.spritecollide(self.player, self.enemies, False)
             for enemy in hits_player:
                 SoundManager.play_hurt_sound()
+
+                # Lưu mốc thời gian bị đánh trúng
+                self.player.hit_timer = pygame.time.get_ticks()
+                
                 if getattr(enemy, "type", "") == "boss":
                     self.player.health -= 20
                 else:
@@ -525,7 +534,22 @@ class Game:
                 draw_rect = self.camera.apply(s.rect) if self.camera else s.rect
             except Exception:
                 draw_rect = s.rect
-            self.screen.blit(s.image, draw_rect)
+
+            # --- KIỂM TRA HIỆU ỨNG NHẤP NHÁY CHO PLAYER ---
+            if s == self.player and getattr(s, 'hit_timer', 0) > 0:
+                current_time = pygame.time.get_ticks()
+                # Kiểm tra xem có còn trong thời gian hiệu ứng (ví dụ 200ms) không
+                if current_time - s.hit_timer < 200: 
+                    # Tạo ảnh tạm màu đỏ
+                    red_img = s.image.copy()
+                    red_img.fill((255, 0, 0, 255), special_flags=pygame.BLEND_RGBA_MULT)
+                    self.screen.blit(red_img, draw_rect)
+                else:
+                    s.hit_timer = 0 # Hết thời gian thì reset về 0
+                    self.screen.blit(s.image, draw_rect)
+            else:
+                # Vẽ các sprite khác (quái, npc...) bình thường
+                self.screen.blit(s.image, draw_rect)
 
         # draw NPC speech bubble above NPC (small) and dialog with a font that supports Vietnamese
         try:
