@@ -120,7 +120,8 @@ class Game:
         # heal items
         self.heal_items = pygame.sprite.Group()
         self.heal_spawn_timer = 0
-
+        # play begin sound only once
+        self.has_played_begin_sound = False
     # ---------------- helper ----------------
     def find_free_tile_center(self, avoid_pos=None, min_dist=0):
         """
@@ -198,6 +199,7 @@ class Game:
         self.training_spawned = False
         self.training_completed = False
         self.training_moved_map = False
+        self.has_played_begin_sound = False
 
         # debug: kiểm tra collision rects (tùy in)
         # print("collision rects:", len(self.map_manager.collision_rects))
@@ -371,7 +373,11 @@ class Game:
         # --- After NPC finished training intro, spawn enemies once ---
         if self.training_started and not self.training_spawned:
             if not getattr(self.npc, 'is_speaking', False) and not getattr(self.npc, 'waiting_for_input', False):
-                # spawn 10 mon1 and 3 mon2
+                # Phát âm thanh ngay khi bắt đầu đợt quái đầu tiên của tutorial
+                if not self.has_played_begin_sound:
+                    SoundManager.play_begin_sound()
+                    self.has_played_begin_sound = True
+                    
                 try:
                     for i in range(10):
                         e = Enemy(self.player, map_manager=self.map_manager)
@@ -445,7 +451,7 @@ class Game:
                 self.switch_to_main_map()
         # --- Trong Game.update ---
         self.heal_spawn_timer += 1
-        if self.heal_spawn_timer >= 10 * FPS:
+        if self.heal_spawn_timer >= 15 * FPS and len(self.heal_items) < 3:
             self.heal_spawn_timer = 0
             
             # Sử dụng hàm find_free_tile_center để túi máu không nằm trong tường
@@ -593,6 +599,10 @@ class Game:
     
     def spawn_enemy(self):
         """Spawn một enemy thông thường, tránh player"""
+        # --- THÊM LOGIC PHÁT ÂM THANH 1 LẦN TẠI ĐÂY ---
+        if not self.has_played_begin_sound:
+            SoundManager.play_begin_sound()
+            self.has_played_begin_sound = True
         spawn_pos = self.find_free_tile_center(
             avoid_pos=self.player.rect.center if self.player else None,
             min_dist=ENEMY_SPAWN_MIN_DIST

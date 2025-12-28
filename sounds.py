@@ -15,6 +15,7 @@ class SoundManager:
     shoot_channel = None
     reload_channel = None
     initialized = False
+    begin_sound = None
 
     @staticmethod
     def init_mixer():
@@ -53,8 +54,17 @@ class SoundManager:
             SoundManager.reload_sound = None
 
         SoundManager.initialized = True
-
+        try:
+            # Lưu ý: Bạn nói folder là 'soundeffect', hãy kiểm tra lại đường dẫn
+            SoundManager.begin_sound = pygame.mixer.Sound(sound_path("soundeffect/soundbegin.mp3"))
+            SoundManager.begin_sound.set_volume(0.7)
+        except Exception as e:
+            print("Can't load soundbegin:", e)
     # --- music helpers (unchanged) ---
+    @staticmethod
+    def play_begin_sound():
+        if SoundManager.begin_sound:
+            SoundManager.begin_sound.play()
     @staticmethod
     def play_background_music(volume=0.5):
         try:
