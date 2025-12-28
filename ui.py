@@ -6,7 +6,6 @@ from settings import *
 BASE_DIR = os.path.dirname(__file__)
 
 def load_img(*path):
-    # *path giúp nối chuỗi linh hoạt, ví dụ: load_img('anhgd2', 'play.png')
     return pygame.image.load(os.path.join(BASE_DIR, *path)).convert_alpha()
 
 class UI:
@@ -27,18 +26,13 @@ class UI:
         self.bg_image = pygame.transform.scale(original_bg, (new_width, new_height))
         self.bg_rect = self.bg_image.get_rect(center=(WIDTH // 2, HEIGHT // 2))
 
-        # Instructions
-        original_instr = load_img('anhgd2', 'howto.png')
-        self.instructions_img = pygame.transform.scale(original_instr, (WIDTH, HEIGHT))
-        self.instructions_rect = self.instructions_img.get_rect(topleft=(0, 0))
-
         # Buttons (Play, Quit, HowTo)
         button_width = 300
         button_height = 100
 
         self.restart_img = pygame.transform.scale(load_img('anhgd2', 'play.png'), (button_width, button_height))
         self.quit_img = pygame.transform.scale(load_img('anhgd2', 'quit.png'), (button_width, button_height))
-        self.howto_img = pygame.transform.scale(load_img('anhgd2', 'instructions.png'), (button_width, button_height))
+        self.howto_img = pygame.transform.scale(load_img('anhgd2', 'instructions.png'), (button_width, button_height))  # Giữ nút HowTo
 
         self.restart_rect = self.restart_img.get_rect(center=(WIDTH // 2, HEIGHT // 2 - 75))
         self.quit_rect = self.quit_img.get_rect(center=(WIDTH // 2, HEIGHT // 2 + 35))
@@ -65,28 +59,37 @@ class UI:
         # 3. LOAD ẢNH GAME OVER (DEFEAT)
         # ==========================================
         try:
-            # Ảnh nền Defeat (Sử dụng load_img cho đồng bộ)
             img_defeat_bg = load_img('anhgd2', 'defeat_bg.png')
             self.defeat_bg = pygame.transform.scale(img_defeat_bg, (WIDTH, HEIGHT))
             
-            # Nút Quit (X) - Đặt ở góc trái dưới
             img_quit = load_img('anhgd2', 'btn_quit.png')
             self.btn_quit_over = pygame.transform.scale(img_quit, (100, 100)) 
             self.rect_quit_over = self.btn_quit_over.get_rect(bottomleft=(50, HEIGHT - 50))
 
-            # Nút Play Again (Mũi tên) - Đặt ở góc phải dưới
             img_restart = load_img('anhgd2', 'btn_restart.png')
             self.btn_restart_over = pygame.transform.scale(img_restart, (100, 100)) 
             self.rect_restart_over = self.btn_restart_over.get_rect(bottomright=(WIDTH - 50, HEIGHT - 50))
-            # Nút Home (Trở về menu chính)
-            img_home = load_img('anhgd2', 'mainmenu.png') # Tái sử dụng ảnh backhome hoặc dùng ảnh mới
+
+            img_home = load_img('anhgd2', 'mainmenu.png')
             self.btn_home_over = pygame.transform.scale(img_home, (200, 200))
             self.rect_home_over = self.btn_home_over.get_rect(midbottom=(WIDTH // 2, HEIGHT - 10))
         except Exception as e:
             print(f"Lỗi tải ảnh Game Over: {e}")
-            # Tạo màn hình đen dự phòng nếu lỗi ảnh
             self.defeat_bg = pygame.Surface((WIDTH, HEIGHT))
             self.defeat_bg.fill((50, 0, 0))
+
+        # ==========================================
+        # 4. SLIDESHOW INSTRUCTIONS (4 slide) - PHẦN MỚI
+        # ==========================================
+        self.instruction_slides = []
+        self.current_slide = 0
+        self.showing_instructions = False
+
+        # Load 4 ảnh riêng lẻ (4 dòng)
+        self.instruction_slides.append(pygame.transform.scale(load_img('anhgd2', 'guide1.png'), (WIDTH, HEIGHT)))
+        self.instruction_slides.append(pygame.transform.scale(load_img('anhgd2', 'guide2.png'), (WIDTH, HEIGHT)))
+        self.instruction_slides.append(pygame.transform.scale(load_img('anhgd2', 'guide3.png'), (WIDTH, HEIGHT)))
+        self.instruction_slides.append(pygame.transform.scale(load_img('anhgd2', 'guide4.png'), (WIDTH, HEIGHT)))
 
     # ================= DRAW FUNCTIONS =================
 
@@ -98,8 +101,13 @@ class UI:
         self.screen.blit(self.howto_img, self.howto_rect)
 
     def draw_instructions(self):
-        self.screen.fill((0, 0, 0))
-        self.screen.blit(self.instructions_img, self.instructions_rect)
+        if not self.showing_instructions:
+            return
+
+        # Vẽ slide hiện tại full màn hình
+        self.screen.blit(self.instruction_slides[self.current_slide], (0, 0))
+
+        # Hint nhỏ (tùy chọn - nếu không muốn thì comment/xóa 4 dòng dưới)
 
     def draw_ingame_buttons(self):
         self.screen.blit(self.backhome_img, self.backhome_rect)
@@ -107,18 +115,15 @@ class UI:
         self.screen.blit(self.mute_img, self.mute_rect)
 
     def draw_hud(self, health):
-        # Vẽ HP góc trái
         hp_text = self.small_font.render(f"HP: {health}", True, WHITE)
         self.screen.blit(hp_text, (10, 10))
 
-        # Vẽ Score ở giữa (để tránh đè lên nút Pause bên phải)
         score_text = self.small_font.render(f"SCORE: {self.score}", True, YELLOW)
         self.screen.blit(score_text, (WIDTH // 2 - 50, 10))
 
     def draw_game_over(self):
         self.screen.blit(self.defeat_bg, (0, 0))
     
-        # Vẽ 3 nút: Quit (Trái), Home (Giữa), Restart (Phải)
         self.screen.blit(self.btn_quit_over, self.rect_quit_over)
         self.screen.blit(self.btn_home_over, self.rect_home_over)
         self.screen.blit(self.btn_restart_over, self.rect_restart_over)
@@ -127,16 +132,30 @@ class UI:
         score_rect = score_text.get_rect(center=(WIDTH // 2, HEIGHT // 2 + 50))
         self.screen.blit(score_text, score_rect)
 
+    # ================= HÀM CHO SLIDESHOW =================
+
+    def start_instructions(self):
+        self.showing_instructions = True
+        self.current_slide = 0
+
+    def next_slide(self):
+        self.current_slide += 1
+        if self.current_slide >= len(self.instruction_slides):
+            self.showing_instructions = False
+            self.current_slide = 0
+            return True  # Hết slide → dùng để quay về menu
+        return False
+
     # ================= UTILS (GET RECTS) =================
 
-    def get_button_rects(self): # Cho Menu chính
+    def get_button_rects(self):
         return {
             'restart': self.restart_rect,
             'quit': self.quit_rect,
             'howto': self.howto_rect
         }
 
-    def get_ingame_button_rects(self): # Cho màn hình Playing
+    def get_ingame_button_rects(self):
         return {
             'backhome': self.backhome_rect,
             'pause': self.pause_rect,
@@ -146,6 +165,6 @@ class UI:
     def get_game_over_buttons(self):
         return {
             'quit': self.rect_quit_over,
-            'home': self.rect_home_over,   # Thêm nút home vào đây
+            'home': self.rect_home_over,
             'restart': self.rect_restart_over
         }
