@@ -608,13 +608,7 @@ class Game:
         if self.player is not None:
             self.player.draw_ammo(self.screen)
 
-        # pause overlay
-        if getattr(self.ui, "is_paused", False):
-            overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
-            overlay.fill((0, 0, 0, 128))
-            self.screen.blit(overlay, (0, 0))
-            pause_text = self.ui.font.render("PAUSED", True, (255, 255, 255))
-            self.screen.blit(pause_text, pause_text.get_rect(center=(WIDTH // 2, HEIGHT // 2)))
+        
 # pause overlay
 if getattr(self.ui, "is_paused", False):
     overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
@@ -622,6 +616,14 @@ if getattr(self.ui, "is_paused", False):
     self.screen.blit(overlay, (0, 0))
     pause_text = self.ui.font.render("PAUSED", True, (255, 255, 255))
     self.screen.blit(pause_text, pause_text.get_rect(center=(WIDTH // 2, HEIGHT // 2)))
+
+# ===== SKILL UI =====
+self.player.update_skills()
+self.player.draw_shield(self.screen)
+draw_skill_ui(self.screen, self.player, self.font)
+# ===================
+
+pygame.display.flip()
 
 
 
@@ -681,5 +683,6 @@ if getattr(self.ui, "is_paused", False):
 if __name__ == "__main__":
     g = Game()
     g.run()
+
 
 
