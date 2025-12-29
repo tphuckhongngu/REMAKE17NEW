@@ -87,7 +87,6 @@ class Game:
                     self.dialog_font = pygame.font.SysFont(None, 22)
         except Exception:
             self.dialog_font = pygame.font.SysFont(None, 22)
-        self.ui.load_high_score()
 
         # trạng thái game
         self.game_state = "MENU"  # MENU, PLAYING, GAME_OVER, INSTRUCTIONS
@@ -430,9 +429,6 @@ class Game:
                 if hasattr(enemy, "score_value"):
                     try:
                         self.ui.score += enemy.score_value
-                        if self.ui.score > self.ui.high_score:
-                            self.ui.high_score = self.ui.score
-                            self.ui.save_high_score()
                     except Exception:
                         pass
                 enemy.kill()
@@ -483,11 +479,6 @@ class Game:
             # SoundManager.play_heal_sound()
         # game over
         if self.player is not None and self.player.health <= 0:
-            # Lưu high score lần cuối nếu phá kỷ lục
-            if self.ui.score > self.ui.high_score:
-                self.ui.high_score = self.ui.score
-                self.ui.save_high_score()
-            
             self.game_state = "GAME_OVER"
             SoundManager.stop_music()
 
@@ -503,10 +494,6 @@ class Game:
             return
         if self.game_state == "INSTRUCTIONS":
             self.ui.draw_instructions()
-            pygame.display.flip()
-            return
-        if self.game_state == "HIGHSCORE":
-            self.ui.draw_highscore_screen()
             pygame.display.flip()
             return
 
