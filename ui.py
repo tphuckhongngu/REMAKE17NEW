@@ -238,6 +238,3 @@ class UI:
                 f.write(str(self.high_score))
         except:
             pass
-    font = pygame.font.SysFont(None, 24)
-draw_skill_ui(screen, player, font)
-player.draw_shield(screen)
