@@ -238,3 +238,4 @@ class UI:
                 f.write(str(self.high_score))
         except:
             pass
+        # End of UI module. No top-level pygame.font or draw calls here.
