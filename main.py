@@ -17,7 +17,6 @@ from maps import tutorial_map
 from maps import complex_map
 from npc import NPC
 from item import HealItem
-from ui_skill import draw_skill_ui
 
 # tinh chỉnh spawn (pixel)
 ENEMY_SPAWN_MIN_DIST = 200   # tối thiểu khoảng cách spawn enemy cách player (pixel)
@@ -27,13 +26,10 @@ ENEMY_SPAWN_TRIES = 500      # số lần thử tìm tile trống trước khi f
 class Game:
     def __init__(self):
         pygame.init()
-        font = pygame.font.SysFont(None, 24)
         self.screen = pygame.display.set_mode((WIDTH, HEIGHT))
         pygame.display.set_caption(TITLE)
         self.clock = pygame.time.Clock()
-    
 
-        
         # load assets cần thiết
         load_enemy_sprites()  # nếu hàm này tồn tại
         SoundManager.init_mixer()
@@ -92,7 +88,7 @@ class Game:
         except Exception:
             self.dialog_font = pygame.font.SysFont(None, 22)
         self.ui.load_high_score()
-        self.ui.update_rank(self.ui.high_score)
+
         # trạng thái game
         self.game_state = "MENU"  # MENU, PLAYING, GAME_OVER, INSTRUCTIONS
 
@@ -608,24 +604,13 @@ class Game:
         if self.player is not None:
             self.player.draw_ammo(self.screen)
 
-        
-# pause overlay
-if getattr(self.ui, "is_paused", False):
-    overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
-    overlay.fill((0, 0, 0, 128))
-    self.screen.blit(overlay, (0, 0))
-    pause_text = self.ui.font.render("PAUSED", True, (255, 255, 255))
-    self.screen.blit(pause_text, pause_text.get_rect(center=(WIDTH // 2, HEIGHT // 2)))
-
-# ===== SKILL UI =====
-self.player.update_skills()
-self.player.draw_shield(self.screen)
-draw_skill_ui(self.screen, self.player, self.font)
-# ===================
-
-pygame.display.flip()
-
-
+        # pause overlay
+        if getattr(self.ui, "is_paused", False):
+            overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+            overlay.fill((0, 0, 0, 128))
+            self.screen.blit(overlay, (0, 0))
+            pause_text = self.ui.font.render("PAUSED", True, (255, 255, 255))
+            self.screen.blit(pause_text, pause_text.get_rect(center=(WIDTH // 2, HEIGHT // 2)))
 
         pygame.display.flip()
 
@@ -683,6 +668,3 @@ pygame.display.flip()
 if __name__ == "__main__":
     g = Game()
     g.run()
-
-
-
