@@ -26,10 +26,13 @@ ENEMY_SPAWN_TRIES = 500      # số lần thử tìm tile trống trước khi f
 class Game:
     def __init__(self):
         pygame.init()
+        font = pygame.font.SysFont(None, 24)
         self.screen = pygame.display.set_mode((WIDTH, HEIGHT))
         pygame.display.set_caption(TITLE)
         self.clock = pygame.time.Clock()
+    
 
+        
         # load assets cần thiết
         load_enemy_sprites()  # nếu hàm này tồn tại
         SoundManager.init_mixer()
@@ -668,3 +671,4 @@ class Game:
 if __name__ == "__main__":
     g = Game()
     g.run()
+
