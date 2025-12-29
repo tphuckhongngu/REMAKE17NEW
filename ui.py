@@ -23,11 +23,11 @@ class UI:
         self.deep_menu_background = pygame.transform.scale(original_menu_bg, (WIDTH, HEIGHT))
 
         original_bg = load_img('anhgd2', 'background_menu.png')
-        scale_factor = 2.4
+        scale_factor = 0.4
         new_width = int(original_bg.get_width() * scale_factor)
         new_height = int(original_bg.get_height() * scale_factor)
         self.bg_image = pygame.transform.scale(original_bg, (new_width, new_height))
-        self.bg_rect = self.bg_image.get_rect(center=(WIDTH // 2, HEIGHT // 2 + 50))
+        self.bg_rect = self.bg_image.get_rect(midtop=(WIDTH // 2, -150))
 
         # Buttons (Play, HowTo, Quit, HighScore) - cùng kích thước
         button_width = 300
