@@ -17,6 +17,7 @@ from maps import tutorial_map
 from maps import complex_map
 from npc import NPC
 from item import HealItem
+from ui_skill import draw_skill_ui
 
 # tinh chỉnh spawn (pixel)
 ENEMY_SPAWN_MIN_DIST = 200   # tối thiểu khoảng cách spawn enemy cách player (pixel)
@@ -614,6 +615,15 @@ class Game:
             self.screen.blit(overlay, (0, 0))
             pause_text = self.ui.font.render("PAUSED", True, (255, 255, 255))
             self.screen.blit(pause_text, pause_text.get_rect(center=(WIDTH // 2, HEIGHT // 2)))
+# pause overlay
+if getattr(self.ui, "is_paused", False):
+    overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+    overlay.fill((0, 0, 0, 128))
+    self.screen.blit(overlay, (0, 0))
+    pause_text = self.ui.font.render("PAUSED", True, (255, 255, 255))
+    self.screen.blit(pause_text, pause_text.get_rect(center=(WIDTH // 2, HEIGHT // 2)))
+
+
 
         pygame.display.flip()
 
@@ -671,4 +681,5 @@ class Game:
 if __name__ == "__main__":
     g = Game()
     g.run()
+
 
