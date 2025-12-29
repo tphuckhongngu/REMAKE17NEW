@@ -17,6 +17,7 @@ from maps import tutorial_map
 from maps import complex_map
 from npc import NPC
 from item import HealItem
+from ui_skill import draw_skill_ui
 
 # tinh chỉnh spawn (pixel)
 ENEMY_SPAWN_MIN_DIST = 200   # tối thiểu khoảng cách spawn enemy cách player (pixel)
@@ -26,10 +27,13 @@ ENEMY_SPAWN_TRIES = 500      # số lần thử tìm tile trống trước khi f
 class Game:
     def __init__(self):
         pygame.init()
+        font = pygame.font.SysFont(None, 24)
         self.screen = pygame.display.set_mode((WIDTH, HEIGHT))
         pygame.display.set_caption(TITLE)
         self.clock = pygame.time.Clock()
+    
 
+        
         # load assets cần thiết
         load_enemy_sprites()  # nếu hàm này tồn tại
         SoundManager.init_mixer()
@@ -88,7 +92,7 @@ class Game:
         except Exception:
             self.dialog_font = pygame.font.SysFont(None, 22)
         self.ui.load_high_score()
-
+        self.ui.update_rank(self.ui.high_score)
         # trạng thái game
         self.game_state = "MENU"  # MENU, PLAYING, GAME_OVER, INSTRUCTIONS
 
@@ -514,17 +518,31 @@ class Game:
         self.screen.fill((30, 30, 30))
 
         # 1) draw map
-        self.map_manager.draw(self.screen, self.camera)
-        # 2. Vẽ Túi máu (Dưới chân Player)
+        try:
+            self.map_manager.draw(self.screen, self.camera)
+        except Exception:
+            pass
+
+        # 2) Vẽ Túi máu (Dưới chân Player)
         for item in self.heal_items:
-            self.screen.blit(item.image, self.camera.apply(item.rect))
-        # 2) draw bullets (trước player để layering) with camera
+            try:
+                self.screen.blit(item.image, self.camera.apply(item.rect))
+            except Exception:
+                try:
+                    self.screen.blit(item.image, item.rect)
+                except Exception:
+                    pass
+
+        # 3) draw bullets (trước player để layering)
         for b in self.bullets:
             try:
                 draw_rect = self.camera.apply(b.rect) if self.camera else b.rect
             except Exception:
                 draw_rect = b.rect
-            self.screen.blit(b.image, draw_rect)
+            try:
+                self.screen.blit(b.image, draw_rect)
+            except Exception:
+                pass
 
         # debug overlay: draw bullet markers and count
         try:
@@ -541,76 +559,102 @@ class Game:
         except Exception:
             pass
 
-        # 3) draw sprites with camera
+        # 4) draw sprites with camera
         for s in self.all_sprites:
             try:
                 draw_rect = self.camera.apply(s.rect) if self.camera else s.rect
             except Exception:
                 draw_rect = s.rect
 
-            # --- KIỂM TRA HIỆU ỨNG NHẤP NHÁY CHO PLAYER ---
+            # player hit flash
             if s == self.player and getattr(s, 'hit_timer', 0) > 0:
-                current_time = pygame.time.get_ticks()
-                # Kiểm tra xem có còn trong thời gian hiệu ứng (ví dụ 200ms) không
-                if current_time - s.hit_timer < 200: 
-                    # Tạo ảnh tạm màu đỏ
-                    red_img = s.image.copy()
-                    red_img.fill((255, 0, 0, 255), special_flags=pygame.BLEND_RGBA_MULT)
-                    self.screen.blit(red_img, draw_rect)
-                else:
-                    s.hit_timer = 0 # Hết thời gian thì reset về 0
-                    self.screen.blit(s.image, draw_rect)
-            else:
-                # Vẽ các sprite khác (quái, npc...) bình thường
-                self.screen.blit(s.image, draw_rect)
-
-        # draw NPC speech bubble above NPC (small) and dialog with a font that supports Vietnamese
-        try:
-            if getattr(self, 'npc', None) is not None:
-                # try to use Arial-like font for Vietnamese; fallback to default
-                font = getattr(self, 'dialog_font', pygame.font.SysFont(None, 22))
-
-                # draw dialog box (bottom of screen) with Vietnamese-capable font
                 try:
-                    self.npc.draw_dialog(self.screen, self.dialog_font if hasattr(self, 'dialog_font') else font, (WIDTH, HEIGHT))
-                    # show hint to press Enter to continue while dialog active or queued
+                    current_time = pygame.time.get_ticks()
+                    if current_time - s.hit_timer < self.flash_duration:
+                        red_img = s.image.copy()
+                        red_img.fill((255, 0, 0, 255), special_flags=pygame.BLEND_RGBA_MULT)
+                        self.screen.blit(red_img, draw_rect)
+                    else:
+                        s.hit_timer = 0
+                        self.screen.blit(s.image, draw_rect)
+                except Exception:
                     try:
-                        if getattr(self.npc, 'is_speaking', False) or (getattr(self.npc, 'dialog_queue', None) and len(self.npc.dialog_queue) > 0):
-                            hint = "Nhấn Enter để tiếp tục"
-                            hint_font = self.dialog_font if hasattr(self, 'dialog_font') else font
-                            hint_surf = hint_font.render(hint, True, (220, 220, 220))
-                            hint_r = hint_surf.get_rect()
-                            # position above right of dialog box
-                            hint_r.bottomright = (WIDTH - 30, HEIGHT - 30)
-                            self.screen.blit(hint_surf, hint_r)
+                        self.screen.blit(s.image, draw_rect)
                     except Exception:
                         pass
+            else:
+                try:
+                    self.screen.blit(s.image, draw_rect)
+                except Exception:
+                    pass
+
+        # draw NPC dialog (if any)
+        try:
+            if getattr(self, 'npc', None) is not None:
+                font = getattr(self, 'dialog_font', pygame.font.SysFont(None, 22))
+                try:
+                    self.npc.draw_dialog(self.screen, font, (WIDTH, HEIGHT))
                 except Exception:
                     pass
         except Exception:
             pass
 
-        # 4) UI + ammo
+        # UI + ammo
         try:
-            self.ui.draw_hud(self.player.health)
+            # draw_hud may accept health or not depending on implementation
+            if self.player is not None:
+                self.ui.draw_hud(self.player.health)
+            else:
+                self.ui.draw_hud()
         except Exception:
             try:
                 self.ui.draw_hud()
             except Exception:
                 pass
 
-        self.ui.draw_ingame_buttons()
+        try:
+            self.ui.draw_ingame_buttons()
+        except Exception:
+            pass
 
-        if self.player is not None:
-            self.player.draw_ammo(self.screen)
+        try:
+            if self.player is not None:
+                self.player.draw_ammo(self.screen)
+        except Exception:
+            pass
 
         # pause overlay
-        if getattr(self.ui, "is_paused", False):
-            overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
-            overlay.fill((0, 0, 0, 128))
-            self.screen.blit(overlay, (0, 0))
-            pause_text = self.ui.font.render("PAUSED", True, (255, 255, 255))
-            self.screen.blit(pause_text, pause_text.get_rect(center=(WIDTH // 2, HEIGHT // 2)))
+        try:
+            if getattr(self.ui, "is_paused", False):
+                overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+                overlay.fill((0, 0, 0, 128))
+                self.screen.blit(overlay, (0, 0))
+                try:
+                    pause_text = self.ui.font.render("PAUSED", True, (255, 255, 255))
+                    self.screen.blit(pause_text, pause_text.get_rect(center=(WIDTH // 2, HEIGHT // 2)))
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
+        # skill UI
+        try:
+            if self.player is not None:
+                try:
+                    self.player.update_skills()
+                except Exception:
+                    pass
+                try:
+                    self.player.draw_shield(self.screen)
+                except Exception:
+                    pass
+                try:
+                    ui_font = getattr(self.ui, 'font', getattr(self, 'dialog_font', pygame.font.SysFont(None, 18)))
+                    draw_skill_ui(self.screen, self.player, ui_font)
+                except Exception:
+                    pass
+        except Exception:
+            pass
 
         pygame.display.flip()
 
@@ -668,3 +712,6 @@ class Game:
 if __name__ == "__main__":
     g = Game()
     g.run()
+
+
+

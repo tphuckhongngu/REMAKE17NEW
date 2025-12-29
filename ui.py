@@ -2,7 +2,7 @@ import pygame
 import os
 from settings import *
 
-# ===== HÀM LOAD ẢNH AN TOÀN (Giúp chạy tốt trên cả Windows/Mac) =====
+# ===== HÀM LOAD ẢNH AN TOÀN =====
 BASE_DIR = os.path.dirname(__file__)
 
 def load_img(*path):
@@ -14,7 +14,7 @@ class UI:
         self.font = pygame.font.SysFont(None, 48)
         self.small_font = pygame.font.SysFont(None, 32)
         self.score = 0
-        self.high_score = 0  # Điểm cao nhất
+        self.high_score = 0
 
         # ==========================================
         # 1. LOAD ẢNH MENU CHÍNH
@@ -22,14 +22,17 @@ class UI:
         original_menu_bg = load_img('anhgd2', 'nentrencung.png')
         self.deep_menu_background = pygame.transform.scale(original_menu_bg, (WIDTH, HEIGHT))
 
+
+        self.highscore_bg = load_img('anhgd2', 'highscore_background.png')
+        self.highscore_bg = pygame.transform.scale(self.highscore_bg, (WIDTH, HEIGHT))
+
         original_bg = load_img('anhgd2', 'background_menu.png')
-        scale_factor = 2.4
+        scale_factor = 0.4
         new_width = int(original_bg.get_width() * scale_factor)
         new_height = int(original_bg.get_height() * scale_factor)
         self.bg_image = pygame.transform.scale(original_bg, (new_width, new_height))
-        self.bg_rect = self.bg_image.get_rect(center=(WIDTH // 2, HEIGHT // 2 + 50))
+        self.bg_rect = self.bg_image.get_rect(midtop=(WIDTH // 2, -150))
 
-        # Buttons (Play, HowTo, Quit, HighScore) - cùng kích thước
         button_width = 300
         button_height = 100
 
@@ -38,14 +41,13 @@ class UI:
         self.quit_img = pygame.transform.scale(load_img('anhgd2', 'quit.png'), (button_width, button_height))
         self.highscore_img = pygame.transform.scale(load_img('anhgd2', 'highscore.png'), (button_width, button_height))
 
-        # Vị trí nút từ trên xuống dưới
-    
         self.restart_rect = self.restart_img.get_rect(center=(WIDTH // 2, HEIGHT // 2 - 100))
         self.howto_rect = self.howto_img.get_rect(center=(WIDTH // 2, HEIGHT // 2 + 10))
         self.quit_rect = self.quit_img.get_rect(center=(WIDTH // 2, HEIGHT // 2 + 120))
         self.highscore_rect = self.highscore_img.get_rect(center=(WIDTH // 2, HEIGHT // 2 + 230))
+
         # ==========================================
-        # 2. LOAD ẢNH IN-GAME (Nút nhỏ góc phải)
+        # 2. LOAD ẢNH IN-GAME
         # ==========================================
         button_size = 80
         self.backhome_img = pygame.transform.scale(load_img('anhgd2', 'backhome.png'), (button_size, button_size))
@@ -61,7 +63,7 @@ class UI:
         self.is_paused = False
 
         # ==========================================
-        # 3. LOAD ẢNH GAME OVER (DEFEAT)
+        # 3. LOAD ẢNH GAME OVER
         # ==========================================
         try:
             img_defeat_bg = load_img('anhgd2', 'defeat_bg.png')
@@ -84,7 +86,7 @@ class UI:
             self.defeat_bg.fill((50, 0, 0))
 
         # ==========================================
-        # 4. SLIDESHOW INSTRUCTIONS (4 slide)
+        # 4. SLIDESHOW INSTRUCTIONS
         # ==========================================
         self.instruction_slides = []
         self.current_slide = 0
@@ -95,14 +97,47 @@ class UI:
         self.instruction_slides.append(pygame.transform.scale(load_img('anhgd2', 'guide3.png'), (WIDTH, HEIGHT)))
         self.instruction_slides.append(pygame.transform.scale(load_img('anhgd2', 'guide4.png'), (WIDTH, HEIGHT)))
 
+        # ===== RANK HÌNH ẢNH - CHỈ HIỂN THỊ Ở HIGH SCORE =====
+        self.rank_images = [None] * 8
+        self.current_rank_index = 0
+        try:
+            rank_dir = os.path.join(BASE_DIR, 'ranks')
+            for i in range(1, 9):
+                path = os.path.join(rank_dir, f'rank{i}.png')
+                if os.path.exists(path):
+                    img = pygame.image.load(path).convert_alpha()
+                    self.rank_images[i-1] = pygame.transform.scale(img, (1100, 800))
+                else:
+                    print(f"Thiếu file: ranks/rank{i}.png")
+        except Exception as e:
+            print(f"Lỗi load rank images: {e}")
+
+    def get_rank_index(self, score):
+        if score < 100:
+            return 0
+        elif score < 300:
+            return 1
+        elif score < 800:
+            return 2
+        elif score < 1300:
+            return 3
+        elif score < 1800:
+            return 4
+        elif score < 2300:
+            return 5
+        elif score < 2800:
+            return 6
+        else:
+            return 7
+
+    def update_rank(self, score):
+        self.current_rank_index = self.get_rank_index(score)
+
     # ================= DRAW FUNCTIONS =================
 
     def draw_menu(self):
         self.screen.blit(self.deep_menu_background, (0, 0))
         self.screen.blit(self.bg_image, self.bg_rect)
-
-        # Vẽ nút theo thứ tự đẹp mắt
-       
         self.screen.blit(self.restart_img, self.restart_rect)
         self.screen.blit(self.howto_img, self.howto_rect)
         self.screen.blit(self.quit_img, self.quit_rect)
@@ -114,27 +149,19 @@ class UI:
         self.screen.blit(self.instruction_slides[self.current_slide], (0, 0))
 
     def draw_highscore_screen(self):
-        # Nền mờ tối
         overlay = pygame.Surface((WIDTH, HEIGHT))
         overlay.fill((0, 0, 0))
         overlay.set_alpha(200)
         self.screen.blit(overlay, (0, 0))
+        self.screen.blit(self.highscore_bg, (0, 0))
 
-        # Tiêu đề HIGH SCORE
-        title = self.font.render("HIGH SCORE", True, (255, 215, 0))  
-        title_rect = title.get_rect(center=(WIDTH // 2, HEIGHT // 2 - 120))
-        self.screen.blit(title, title_rect)
+        # Chỉ hiển thị hình rank ở đây
+        if self.rank_images[self.current_rank_index] is not None:
+            rank_img = self.rank_images[self.current_rank_index]
+            rank_rect = rank_img.get_rect(center=(WIDTH // 2, HEIGHT // 2 + 80))
+            self.screen.blit(rank_img, rank_rect)
 
-        # Điểm số siêu lớn
-        big_font = pygame.font.SysFont(None, 120)
-        score_text = big_font.render(f"{self.high_score:,}", True, (255, 255, 255))
-        score_rect = score_text.get_rect(center=(WIDTH // 2, HEIGHT // 2 + 20))
-        self.screen.blit(score_text, score_rect)
-
-        # Hướng dẫn quay về
-        hint = self.small_font.render("PRESS CLICK BACK TO MENU GANE", True, (200, 200, 200))
-        hint_rect = hint.get_rect(center=(WIDTH // 2, HEIGHT - 100))
-        self.screen.blit(hint, hint_rect)
+        
 
     def draw_ingame_buttons(self):
         self.screen.blit(self.backhome_img, self.backhome_rect)
@@ -155,16 +182,11 @@ class UI:
         self.screen.blit(self.btn_home_over, self.rect_home_over)
         self.screen.blit(self.btn_restart_over, self.rect_restart_over)
         
-        # Final Score
         score_text = self.font.render(f"Final Score: {self.score}", True, (255, 255, 255))
         score_rect = score_text.get_rect(center=(WIDTH // 2, HEIGHT // 2 + 50))
         self.screen.blit(score_text, score_rect)
 
-        # Nếu phá kỷ lục thì hiện thông báo nổi bật
-        if self.score > self.high_score:
-            new_record = self.font.render("NEW HIGH SCORE!", True, (255, 215, 0))
-            new_rect = new_record.get_rect(center=(WIDTH // 2, HEIGHT // 2 - 50))
-            self.screen.blit(new_record, new_rect)
+    
 
     # ================= SLIDESHOW INSTRUCTIONS =================
     def start_instructions(self):
@@ -216,3 +238,4 @@ class UI:
                 f.write(str(self.high_score))
         except:
             pass
+        # End of UI module. No top-level pygame.font or draw calls here.

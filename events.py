@@ -62,6 +62,7 @@ class EventHandler:
                 self.game.game_state = "INSTRUCTIONS"
                 self.game.ui.start_instructions()
             elif buttons['highscore'].collidepoint(mx, my):   # ← THÊM MỚI
+                self.game.ui.update_rank(self.game.ui.high_score)
                 SoundManager.play_click_sound()
                 self.game.game_state = "HIGHSCORE"
         
