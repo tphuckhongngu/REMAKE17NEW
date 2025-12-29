@@ -88,7 +88,7 @@ class Game:
         except Exception:
             self.dialog_font = pygame.font.SysFont(None, 22)
         self.ui.load_high_score()
-
+        self.ui.update_rank(self.ui.high_score)
         # trạng thái game
         self.game_state = "MENU"  # MENU, PLAYING, GAME_OVER, INSTRUCTIONS
 
