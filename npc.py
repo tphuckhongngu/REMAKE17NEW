@@ -3,7 +3,7 @@ from maps.map_manager import TILE_SIZE
 
 
 class NPC(pygame.sprite.Sprite):
-    def __init__(self, tile_pos, tile_folder="npc"):
+    def __init__(self, tile_pos, tile_folder="npc", name=None):
         super().__init__()
         self.tile_x, self.tile_y = tile_pos
         # load small map icon for npc (to show on map)
@@ -39,6 +39,8 @@ class NPC(pygame.sprite.Sprite):
         self.typing_timer = 0
         self.typing_delay = 3  # frames per character
         self.waiting_for_input = False
+        # optional display name for dialog (shown above text)
+        self.name = name or "NPC"
         # no small speech bubble (we'll draw dialog only)
 
     def speak(self, text, typing_delay=3):
@@ -110,59 +112,119 @@ class NPC(pygame.sprite.Sprite):
         """Draw dialog box with portrait and current typed text."""
         if not self.is_speaking:
             return
-
         sw, sh = screen_size
-        box_h = 120
-        box_w = sw - 40
-        box = pygame.Surface((box_w, box_h))
-        box.fill((20, 20, 20))
-        box.set_alpha(230)
 
-        # portrait
-        px = 10
-        if self.portrait:
-            box.blit(self.portrait, (px, 10))
-            text_x = px + self.portrait.get_width() + 10
-        else:
-            text_x = px + 10
+        # make dialog box slightly narrower than full width to avoid covering edges
+        box_w = int(sw * 0.8)
+        # compute available width for text after portrait
+        px = 12
+        portrait_w = self.portrait.get_width() if self.portrait else 0
+        text_x = px + (portrait_w + 10 if portrait_w else 0)
+        text_available = box_w - text_x - 20
 
-        # render text (wrap if necessary)
-        lines = []
+        # wrap text into lines according to available width
         words = self.display_text.split(' ')
+        lines = []
         cur = ''
         for w in words:
             test = (cur + ' ' + w).strip()
-            txt_surf = font.render(test, True, (255, 255, 255))
-            if txt_surf.get_width() > box_w - text_x - 20:
-                lines.append(cur)
-                cur = w
-            else:
-                cur = test
+            try:
+                txt_surf = font.render(test, True, (255, 255, 255))
+                if txt_surf.get_width() > text_available:
+                    if cur:
+                        lines.append(cur)
+                    cur = w
+                else:
+                    cur = test
+            except Exception:
+                # fallback: naive wrap
+                if len(test) * 8 > text_available:
+                    if cur:
+                        lines.append(cur)
+                    cur = w
+                else:
+                    cur = test
         if cur:
             lines.append(cur)
 
-        # blit text lines
-        ty = 10
-        for line in lines[:4]:
+        # include name as one line above text if present
+        name_lines = []
+        if self.name:
+            name_lines = [self.name]
+
+        # compute box height dynamically: padding + name + text lines + portrait height
+        line_h = font.get_height() + 4
+        text_lines_count = max(len(lines), 1)
+        content_h = (len(name_lines) * line_h) + (text_lines_count * line_h)
+        portrait_h = self.portrait.get_height() if self.portrait else 0
+        inner_h = max(content_h, portrait_h)
+        box_h = inner_h + 24
+
+        # ensure box not too tall for screen
+        max_box_h = int(sh * 0.45)
+        if box_h > max_box_h:
+            box_h = max_box_h
+
+        # position box centered horizontally, slightly above bottom
+        box = pygame.Surface((box_w, box_h), pygame.SRCALPHA)
+        box.fill((20, 20, 20, 230))
+
+        # blit portrait on left if exists
+        if self.portrait:
+            try:
+                portrait_y = 12
+                box.blit(self.portrait, (px, portrait_y))
+            except Exception:
+                pass
+
+        # blit name then text lines
+        ty = 12
+        try:
+            if self.name:
+                name_surf = font.render(self.name, True, (220, 200, 60))
+                box.blit(name_surf, (text_x, ty))
+                ty += name_surf.get_height() + 6
+        except Exception:
+            pass
+
+        for i, line in enumerate(lines):
+            if ty + font.get_height() > box_h - 20:
+                break
             txt = font.render(line, True, (255, 255, 255))
             box.blit(txt, (text_x, ty))
             ty += txt.get_height() + 4
 
-        # position box at bottom
-        surface.blit(box, (20, sh - box_h - 20))
+        # final position and blit to screen
+        bx = (sw - box_w) // 2
+        by = sh - box_h - 20
+        try:
+            surface.blit(box, (bx, by))
+        except Exception:
+            surface.blit(box, (20, by))
+
+        # draw "press Enter" prompt when waiting for input placed inside box bottom-right
+        if self.waiting_for_input:
+            try:
+                prompt = font.render("Nhấn Enter để tiếp tục", True, (180, 180, 180))
+                px_prompt = bx + box_w - prompt.get_width() - 12
+                py_prompt = by + box_h - prompt.get_height() - 8
+                surface.blit(prompt, (px_prompt, py_prompt))
+            except Exception:
+                pass
 
     # ---- higher-level scripted dialogs ----
     def start_initial_tutorial(self, typing_delay=2):
         lines = [
             "Hôm nay lại có chiến binh đến huấn luyện? Hãy cố gắng luyện tập sau đó ra chiến trường Nếu chúng ta thất bại, Trái Đất sẽ không còn cơ hội thứ hai.",
             "Những sinh vật kia từng là động vật bình thường… ô nhiễm đã biến chúng thành quái vật. Mỗi con quái vật bị tiêu diệt là môi trường được thanh lọc thêm một chút.",
-            "Điều khiển nhân vật của bạn bằng phím WASD hoặc phím mũi tên. Nhấp chuột vào màn hình để bắn đạn! Nhưng nhớ rằng bạn chỉ bắn được 15 viên liên tục thôi, sau đó phải nạp đạn — hãy cẩn thận trong những tình huống nguy hiểm!"
+            "Điều khiển nhân vật của bạn bằng phím WASD hoặc phím mũi tên. Nhấp chuột vào màn hình để bắn đạn! Nhưng nhớ rằng bạn chỉ bắn được 15 viên liên tục thôi, sau đó phải nạp đạn — hãy cẩn thận trong những tình huống nguy hiểm!",
+            "Bây giờ, hãy bắn thử đạn đi!"
         ]
         self.start_dialog(lines, typing_delay=typing_delay)
 
     def start_followup_after_reload(self, typing_delay=2):
         lines = [
-            "làm tốt lắm chiến binh!",
+           
             "Luôn nhớ rằng bạn chỉ có 100hp mà thôi, khi hết hp thì bạn sẽ gặp nguy hiểm!.",
             "Quân cứu trợ có đặt bình thuốc trên chiến trường, hãy nhặt nó bạn sẽ có thêm cơ hội sống!."
         ]

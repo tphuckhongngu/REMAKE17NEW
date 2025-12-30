@@ -17,7 +17,7 @@ from maps import tutorial_map
 from maps import complex_map
 from npc import NPC
 from item import HealItem
-from ui_skill import draw_skill_ui
+# skill UI disabled: no on-screen skill panel or bullets HUD
 
 # tinh chỉnh spawn (pixel)
 ENEMY_SPAWN_MIN_DIST = 200   # tối thiểu khoảng cách spawn enemy cách player (pixel)
@@ -28,7 +28,12 @@ class Game:
     def __init__(self):
         pygame.init()
         font = pygame.font.SysFont(None, 24)
-        self.screen = pygame.display.set_mode((WIDTH, HEIGHT))
+        # support starting in fullscreen while keeping logical resolution
+        self.fullscreen = bool(globals().get('FULLSCREEN', False))
+        if self.fullscreen:
+            self.screen = pygame.display.set_mode((WIDTH, HEIGHT), pygame.FULLSCREEN)
+        else:
+            self.screen = pygame.display.set_mode((WIDTH, HEIGHT))
         pygame.display.set_caption(TITLE)
         self.clock = pygame.time.Clock()
     
@@ -41,15 +46,16 @@ class Game:
 
         # hệ thống map, camera, UI
         self.map_manager = MapManager("tiles")
-        # ban đầu load map hướng dẫn (tutorial)
+        # default: load main complex map. Training/tutorial will be loaded
+        # when user clicks the training button from menu.
         try:
-            self.map_manager.layout = tutorial_map.MAP_LAYOUT
-            self.map_manager.build_collision(tutorial_map.MAP_LAYOUT)
-            self.tutorial_mode = True
-        except Exception:
-            # fallback: load complex map if tutorial không khả dụng
             self.map_manager.layout = complex_map.MAP_LAYOUT
             self.map_manager.build_collision(complex_map.MAP_LAYOUT)
+            self.tutorial_mode = False
+        except Exception:
+            # fallback minimal empty layout
+            self.map_manager.layout = []
+            self.map_manager.collision_rects = []
             self.tutorial_mode = False
 
         self.camera = Camera(WIDTH, HEIGHT)
@@ -196,7 +202,7 @@ class Game:
         # fallback: center map
         return (cols * tile_size // 2, rows * tile_size // 2)
 
-    def new_game(self):
+    def new_game(self, tutorial=False):
         # reset toàn bộ
         self.all_sprites.empty()
         self.bullets.empty()
@@ -206,6 +212,8 @@ class Game:
         self.tutorial_followup_done = False
         self.training_started = False
         self.training_spawned = False
+        self.training_enemies_created = False
+        self.training_gate_opened = False
         self.training_completed = False
         self.training_moved_map = False
         self.has_played_begin_sound = False
@@ -213,11 +221,34 @@ class Game:
         # debug: kiểm tra collision rects (tùy in)
         # print("collision rects:", len(self.map_manager.collision_rects))
 
+        # set tutorial mode according to caller request
+        self.tutorial_mode = bool(tutorial)
+
+        # ensure correct map is loaded for chosen mode
+        if self.tutorial_mode:
+            try:
+                self.map_manager.layout = tutorial_map.MAP_LAYOUT
+                self.map_manager.build_collision(tutorial_map.MAP_LAYOUT)
+            except Exception:
+                pass
+        else:
+            try:
+                self.map_manager.layout = complex_map.MAP_LAYOUT
+                self.map_manager.build_collision(complex_map.MAP_LAYOUT)
+            except Exception:
+                pass
+            # explicitly remove any tutorial NPC so player enters immediately
+            try:
+                self.npc = None
+                self.npcs.empty()
+            except Exception:
+                pass
+
         # nếu đang tutorial: tạo NPC hướng dẫn trước để spawn player bên cạnh
         if getattr(self, "tutorial_mode", False):
             try:
-                # tạo NPC tại tile (6,5)
-                self.npc = NPC((6, 5))
+                # tạo NPC tại tile (6,5) với tên hiển thị
+                self.npc = NPC((6, 5), name="Đại úy. Chí Hướng")
                 self.npcs.add(self.npc)
                 self.all_sprites.add(self.npc)
                 # đặt vị trí spawn player ngay bên phải NPC nếu có thể
@@ -306,7 +337,93 @@ class Game:
             return
         self.tutorial_mode = False
         # tạo lại player và sprite groups trên map mới
-        self.new_game()
+        self.new_game(tutorial=False)
+
+    def start_training(self):
+        """Load tutorial map and start training run immediately."""
+        try:
+            self.map_manager.layout = tutorial_map.MAP_LAYOUT
+            self.map_manager.build_collision(tutorial_map.MAP_LAYOUT)
+            self.tutorial_mode = True
+        except Exception:
+            return
+        # reset training gate state and begin the run (will spawn NPC and player appropriately)
+        self.training_gate_opened = False
+        # set the exact line after which monsters should be released
+        self.training_release_line = "Hãy tiêu diệt hết tất cả bọn quái vật này để chứng minh bạn đủ sức để giải cứu thế giới tan hoang này!"
+        self.new_game(tutorial=True)
+
+        # Immediately pre-place training enemies inside enclosure (they are trapped until gate opens)
+        try:
+            spawns = getattr(tutorial_map, 'TRAINING_SPAWNS', None)
+            tile_size = 64
+            try:
+                sample_img = next(iter(self.map_manager.tiles.values()))
+                tile_size = sample_img.get_width()
+            except Exception:
+                pass
+
+            if spawns:
+                cells = list(spawns) if spawns else []
+                if not cells:
+                    cells = [(1, 1)]
+                # distribute monsters to unique cells first
+                random.shuffle(cells)
+                total_m1 = 15
+                total_m2 = 5
+                used_positions = set()
+                idx = 0
+                # helper to get unique center with small jitter if necessary
+                def get_center(sx, sy):
+                    base_x = sx * tile_size + tile_size // 2
+                    base_y = sy * tile_size + tile_size // 2
+                    # jitter a bit to avoid exact overlaps
+                    jx = random.randint(-8, 8)
+                    jy = random.randint(-8, 8)
+                    return (base_x + jx, base_y + jy)
+
+                # place Monster1
+                for i in range(total_m1):
+                    sx, sy = cells[idx % len(cells)]
+                    idx += 1
+                    x, y = get_center(sx, sy)
+                    # avoid exact duplicates by nudging if already used
+                    while (x, y) in used_positions:
+                        x += random.randint(-6, 6)
+                        y += random.randint(-6, 6)
+                    used_positions.add((x, y))
+                    e = Enemy(self.player, map_manager=self.map_manager)
+                    e.rect.center = (x, y)
+                    try:
+                        e.pos = pygame.Vector2((x, y))
+                    except Exception:
+                        pass
+                    self.enemies.add(e)
+                    self.all_sprites.add(e)
+
+                # place Monster2
+                for i in range(total_m2):
+                    sx, sy = cells[idx % len(cells)]
+                    idx += 1
+                    x, y = get_center(sx, sy)
+                    while (x, y) in used_positions:
+                        x += random.randint(-6, 6)
+                        y += random.randint(-6, 6)
+                    used_positions.add((x, y))
+                    m = Monster2(self.player, map_manager=self.map_manager)
+                    m.rect.center = (x, y)
+                    try:
+                        m.pos = pygame.Vector2((x, y))
+                    except Exception:
+                        pass
+                    self.enemies.add(m)
+                    self.all_sprites.add(m)
+
+            # mark created so update() won't re-create
+            self.training_enemies_created = True
+            self.training_spawned = True
+        except Exception:
+            pass
     def trigger_hit_effect(self):
         """Gọi hàm này mỗi khi bị quái chạm"""
         self.hit_timer = pygame.time.get_ticks()
@@ -381,15 +498,58 @@ class Game:
                     pass
                 self.training_started = True
 
-        # --- After NPC finished training intro, spawn enemies once ---
-        if self.training_started and not self.training_spawned:
-            if not getattr(self.npc, 'is_speaking', False) and not getattr(self.npc, 'waiting_for_input', False):
-                # Phát âm thanh ngay khi bắt đầu đợt quái đầu tiên của tutorial
-                if not self.has_played_begin_sound:
-                    SoundManager.play_begin_sound()
-                    self.has_played_begin_sound = True
-                    
+        # --- Spawn training enemies inside the enclosure (they stay trapped) ---
+        if self.training_started and not getattr(self, 'training_enemies_created', False):
+            try:
+                # create enemies at training spawn points so they are pre-placed inside the enclosure
+                spawns = getattr(tutorial_map, 'TRAINING_SPAWNS', None)
+                tile_size = 64
                 try:
+                    sample_img = next(iter(self.map_manager.tiles.values()))
+                    tile_size = sample_img.get_width()
+                except Exception:
+                    pass
+
+                if spawns:
+                    # create 15 Monster1 and 5 Monster2, distributing across available interior cells
+                    total_m1 = 15
+                    total_m2 = 5
+                    cells = list(spawns)
+                    if not cells:
+                        # fallback to the first spawn cell if nothing else
+                        cells = [spawns[0]] if spawns else [(1,1)]
+                    # shuffle-like distribution by cycling index
+                    idx = 0
+                    # place Monster1
+                    for i in range(total_m1):
+                        sx, sy = cells[idx % len(cells)]
+                        idx += 1
+                        x = sx * tile_size + tile_size // 2
+                        y = sy * tile_size + tile_size // 2
+                        e = Enemy(self.player, map_manager=self.map_manager)
+                        e.rect.center = (x, y)
+                        try:
+                            e.pos = pygame.Vector2((x, y))
+                        except Exception:
+                            pass
+                        self.enemies.add(e)
+                        self.all_sprites.add(e)
+
+                    # place Monster2
+                    for i in range(total_m2):
+                        sx, sy = cells[idx % len(cells)]
+                        idx += 1
+                        x = sx * tile_size + tile_size // 2
+                        y = sy * tile_size + tile_size // 2
+                        m = Monster2(self.player, map_manager=self.map_manager)
+                        m.rect.center = (x, y)
+                        try:
+                            m.pos = pygame.Vector2((x, y))
+                        except Exception:
+                            pass
+                        self.enemies.add(m)
+                        self.all_sprites.add(m)
+                else:
                     for i in range(10):
                         e = Enemy(self.player, map_manager=self.map_manager)
                         self.enemies.add(e)
@@ -398,26 +558,55 @@ class Game:
                         m = Monster2(self.player, map_manager=self.map_manager)
                         self.enemies.add(m)
                         self.all_sprites.add(m)
-                except Exception:
-                    pass
-                self.training_spawned = True
+            except Exception:
+                pass
+            # mark created (still trapped until gate opens)
+            self.training_enemies_created = True
+            self.training_spawned = True
+
+        # --- When NPC finished guiding the specific line, open enclosure gate so enemies pour out ---
+        if getattr(self, 'training_enemies_created', False) and not getattr(self, 'training_gate_opened', False):
+            try:
+                release_line = getattr(self, 'training_release_line', None)
+                if release_line and getattr(self, 'npc', None) is not None:
+                    # open gate only when NPC finished typing that exact line
+                    if getattr(self.npc, 'waiting_for_input', False) and getattr(self.npc, 'full_text', '') == release_line:
+                        enclosure = getattr(tutorial_map, 'ENCLOSURE_WALLS', None)
+                        if enclosure:
+                            for gx, gy in enclosure:
+                                try:
+                                    self.map_manager.layout[gy][gx] = 'co'
+                                except Exception:
+                                    pass
+                            try:
+                                self.map_manager.build_collision(self.map_manager.layout)
+                            except Exception:
+                                pass
+                            try:
+                                SoundManager.play_begin_sound()
+                            except Exception:
+                                pass
+                            self.training_gate_opened = True
+            except Exception:
+                pass
 
         # --- detect training completion (all spawned enemies dead) ---
-        if self.training_spawned and not self.training_completed:
-            # if no enemies remain
+        if getattr(self, 'training_enemies_created', False) and not self.training_completed:
             if len(self.enemies) == 0:
-                # trigger final dialog and then move to next map
                 try:
                     self.npc.start_training_end(typing_delay=2)
                 except Exception:
                     pass
                 self.training_completed = True
 
-        # --- after final dialog, move to next map once dialog done ---
+        # --- after final dialog, return to main menu once dialog done ---
         if self.training_completed and not self.training_moved_map:
             if not getattr(self.npc, 'is_speaking', False) and not getattr(self.npc, 'waiting_for_input', False):
                 try:
-                    self.switch_to_main_map()
+                    # go back to main menu instead of immediately switching maps
+                    self.game_state = "MENU"
+                    SoundManager.stop_music()
+                    SoundManager.play_menu_music(volume=0.4)
                     self.training_moved_map = True
                 except Exception:
                     pass
@@ -434,10 +623,12 @@ class Game:
             if getattr(enemy, "hp", 1) <= 0:
                 if hasattr(enemy, "score_value"):
                     try:
-                        self.ui.score += enemy.score_value
-                        if self.ui.score > self.ui.high_score:
-                            self.ui.high_score = self.ui.score
-                            self.ui.save_high_score()
+                        # do not count scores earned during tutorial/training runs
+                        if not getattr(self, 'tutorial_mode', False):
+                            self.ui.score += enemy.score_value
+                            if self.ui.score > self.ui.high_score:
+                                self.ui.high_score = self.ui.score
+                                self.ui.save_high_score()
                     except Exception:
                         pass
                 enemy.kill()
@@ -492,6 +683,12 @@ class Game:
             if self.ui.score > self.ui.high_score:
                 self.ui.high_score = self.ui.score
                 self.ui.save_high_score()
+            # record this play session's score in recent scores list (skip tutorial runs)
+            try:
+                if not getattr(self, 'tutorial_mode', False):
+                    self.ui.record_score(self.ui.score)
+            except Exception:
+                pass
             self.game_state = "GAME_OVER"
             SoundManager.stop_music()
 
@@ -544,20 +741,7 @@ class Game:
             except Exception:
                 pass
 
-        # debug overlay: draw bullet markers and count
-        try:
-            bullet_count = len(self.bullets)
-            dbg_font = pygame.font.SysFont(None, 20)
-            txt = dbg_font.render(f"Bullets: {bullet_count}", True, (255,255,0))
-            self.screen.blit(txt, (10, 40))
-            for b in self.bullets:
-                try:
-                    r = self.camera.apply(b.rect) if self.camera else b.rect
-                    pygame.draw.rect(self.screen, (255,0,0), r, 1)
-                except Exception:
-                    pass
-        except Exception:
-            pass
+        # debug overlay removed: no on-screen bullet count or debug rectangles
 
         # 4) draw sprites with camera
         for s in self.all_sprites:
@@ -601,14 +785,17 @@ class Game:
 
         # UI + ammo
         try:
-            # draw_hud may accept health or not depending on implementation
+            # draw HUD: include ammo when player present
             if self.player is not None:
-                self.ui.draw_hud(self.player.health)
+                try:
+                    self.ui.draw_hud(self.player.health, ammo=getattr(self.player, 'ammo', None), max_ammo=getattr(self.player, 'max_ammo', None))
+                except Exception:
+                    self.ui.draw_hud(self.player.health)
             else:
-                self.ui.draw_hud()
+                self.ui.draw_hud(0)
         except Exception:
             try:
-                self.ui.draw_hud()
+                self.ui.draw_hud(0)
             except Exception:
                 pass
 
@@ -617,11 +804,7 @@ class Game:
         except Exception:
             pass
 
-        try:
-            if self.player is not None:
-                self.player.draw_ammo(self.screen)
-        except Exception:
-            pass
+        # ammo HUD removed: player.draw_ammo() not called so player enters directly
 
         # pause overlay
         try:
@@ -641,6 +824,7 @@ class Game:
         try:
             if self.player is not None:
                 try:
+                    # still update skills (logic/cooldowns) but do not draw skill UI
                     self.player.update_skills()
                 except Exception:
                     pass
@@ -648,11 +832,9 @@ class Game:
                     self.player.draw_shield(self.screen)
                 except Exception:
                     pass
-                try:
-                    ui_font = getattr(self.ui, 'font', getattr(self, 'dialog_font', pygame.font.SysFont(None, 18)))
-                    draw_skill_ui(self.screen, self.player, ui_font)
-                except Exception:
-                    pass
+                # skill UI rendering intentionally removed
+        except Exception:
+            pass
         except Exception:
             pass
 
@@ -673,14 +855,35 @@ class Game:
                             pygame.quit()
                             sys.exit()
                         if event.key == pygame.K_n:
-                            self.new_game()
+                            self.new_game(tutorial=False)
 
             self.update()
             self.draw()
             self.clock.tick(FPS)
+
+    def toggle_fullscreen(self):
+        """Toggle fullscreen mode (keeps logical resolution WIDTHxHEIGHT)."""
+        try:
+            self.fullscreen = not getattr(self, 'fullscreen', False)
+            if self.fullscreen:
+                self.screen = pygame.display.set_mode((WIDTH, HEIGHT), pygame.FULLSCREEN)
+            else:
+                self.screen = pygame.display.set_mode((WIDTH, HEIGHT))
+            # update UI to use new surface
+            try:
+                self.ui.screen = self.screen
+            except Exception:
+                pass
+            # force redraw of menu background if needed
+            pygame.display.flip()
+        except Exception:
+            pass
     
     def spawn_enemy(self):
         """Spawn một enemy thông thường, tránh player"""
+        # Do not spawn normal enemies during tutorial/training
+        if getattr(self, 'tutorial_mode', False):
+            return
         # --- THÊM LOGIC PHÁT ÂM THANH 1 LẦN TẠI ĐÂY ---
         if not self.has_played_begin_sound:
             SoundManager.play_begin_sound()
@@ -698,6 +901,10 @@ class Game:
 
     def spawn_boss(self):
         """Spawn boss khi score đủ, tránh player"""
+        # Do not spawn boss during tutorial/training
+        if getattr(self, 'tutorial_mode', False):
+            return
+
         spawn_pos = self.find_free_tile_center(
             avoid_pos=self.player.rect.center if self.player else None,
             min_dist=ENEMY_SPAWN_MIN_DIST + 100

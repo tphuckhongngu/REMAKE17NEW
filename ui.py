@@ -15,6 +15,9 @@ class UI:
         self.small_font = pygame.font.SysFont(None, 32)
         self.score = 0
         self.high_score = 0
+        # recent scores (most recent first)
+        self.recent_scores = []
+        self.all_scores = []
 
         # ==========================================
         # 1. LOAD ẢNH MENU CHÍNH
@@ -210,20 +213,94 @@ class UI:
             rank_img = self.rank_images[self.current_rank_index]
             rank_rect = rank_img.get_rect(center=(WIDTH // 2, HEIGHT // 2 + 80))
             self.screen.blit(rank_img, rank_rect)
+        # Draw recent scores and top score in a panel on the left to avoid overlapping rank image
+        try:
+            panel_w = 380
+            panel_h = 260
+            panel_x = 40
+            panel_y = 80
+            panel = pygame.Surface((panel_w, panel_h), pygame.SRCALPHA)
+            panel.fill((10, 10, 10, 200))
+            pygame.draw.rect(panel, (200, 200, 200), (0, 0, panel_w, panel_h), 2)
 
-        
+            # Title: top score
+            title_surf = self.font.render("HIGH SCORE", True, (240, 220, 60))
+            panel.blit(title_surf, (12, 8))
+            hs_text = self.small_font.render(str(self.high_score), True, (255, 255, 255))
+            panel.blit(hs_text, (12, 8 + title_surf.get_height() + 6))
+
+            # Recent scores list
+            recent_title = self.small_font.render("Recent Scores:", True, (200, 200, 200))
+            panel.blit(recent_title, (12, 8 + title_surf.get_height() + 6 + hs_text.get_height() + 8))
+            ry = 8 + title_surf.get_height() + 6 + hs_text.get_height() + 8 + recent_title.get_height() + 6
+            for i, sc in enumerate(self.recent_scores[:5]):
+                try:
+                    line = self.small_font.render(f"{i+1}. {sc}", True, (220, 220, 220))
+                    panel.blit(line, (12, ry + i * (line.get_height() + 6)))
+                except Exception:
+                    pass
+
+            # blit panel to screen
+            self.screen.blit(panel, (panel_x, panel_y))
+        except Exception:
+            pass
 
     def draw_ingame_buttons(self):
         self.screen.blit(self.backhome_img, self.backhome_rect)
         self.screen.blit(self.pause_img, self.pause_rect)
         self.screen.blit(self.mute_img, self.mute_rect)
 
-    def draw_hud(self, health):
-        hp_text = self.small_font.render(f"HP: {health}", True, WHITE)
-        self.screen.blit(hp_text, (10, 10))
+    def draw_hud(self, health, ammo=None, max_ammo=None):
+        """Draw health bar, score, and optionally ammo count/bar.
+        Place HP and ammo next to each other at top-left to avoid overlapping top-right buttons.
+        """
+        # left padding; nudge vertical down slightly to avoid cutting off text
+        base_x = 12
+        base_y = 28
 
-        score_text = self.small_font.render(f"SCORE: {self.score}", True, YELLOW)
-        self.screen.blit(score_text, (WIDTH // 2 - 50, 10))
+        # HP bar (left)
+        hp_bar_w = 180
+        hp_bar_h = 18
+        try:
+            hp = max(0, min(health, 100)) if isinstance(health, (int, float)) else 0
+            pygame.draw.rect(self.screen, (60, 60, 60), (base_x, base_y, hp_bar_w, hp_bar_h))
+            fill_w = int(hp_bar_w * (hp / 100.0))
+            pygame.draw.rect(self.screen, (200, 50, 50), (base_x, base_y, fill_w, hp_bar_h))
+            pygame.draw.rect(self.screen, (220, 220, 220), (base_x, base_y, hp_bar_w, hp_bar_h), 2)
+            hp_text = self.small_font.render(f"HP: {int(hp)}", True, WHITE)
+            # place numeric just above the HP bar
+            self.screen.blit(hp_text, (base_x + 6, base_y - hp_text.get_height() - 2))
+        except Exception:
+            try:
+                hp_text = self.small_font.render(f"HP: {health}", True, WHITE)
+                self.screen.blit(hp_text, (base_x, base_y))
+            except Exception:
+                pass
+
+        # Ammo bar (to the right of HP)
+        if ammo is not None and max_ammo is not None:
+            try:
+                gap = 12
+                am_x = base_x + hp_bar_w + gap
+                am_y = base_y
+                am_text = self.small_font.render(f"Ammo: {int(ammo)}/{int(max_ammo)}", True, (255, 255, 255))
+                # text above ammo bar
+                self.screen.blit(am_text, (am_x, am_y - am_text.get_height() - 2))
+                am_bar_w = 140
+                am_bar_h = 12
+                pygame.draw.rect(self.screen, (60, 60, 60), (am_x, am_y, am_bar_w, am_bar_h))
+                fill_aw = int(am_bar_w * (max(0, ammo) / max(1, max_ammo)))
+                pygame.draw.rect(self.screen, (80, 200, 120), (am_x, am_y, fill_aw, am_bar_h))
+                pygame.draw.rect(self.screen, (200, 200, 200), (am_x, am_y, am_bar_w, am_bar_h), 2)
+            except Exception:
+                pass
+
+        # score center-top
+        try:
+            score_text = self.small_font.render(f"SCORE: {self.score}", True, YELLOW)
+            self.screen.blit(score_text, (WIDTH // 2 - score_text.get_width() // 2, base_y))
+        except Exception:
+            pass
 
     def draw_game_over(self):
         self.screen.blit(self.defeat_bg, (0, 0))
@@ -256,6 +333,7 @@ class UI:
         return {
             'highscore': self.highscore_rect,
             'restart': self.restart_rect,
+            'training': self.training_rect,
             'howto': self.howto_rect,
             'quit': self.quit_rect
         }
@@ -276,16 +354,75 @@ class UI:
 
     # ================= HIGH SCORE SAVE / LOAD =================
     def load_high_score(self):
+        # Load recent scores from 'scores.txt' if present (most recent first), fallback to legacy highscore.txt
         try:
-            with open('highscore.txt', 'r') as f:
-                self.high_score = int(f.read().strip())
-        except:
+            scores = []
+            if os.path.exists('scores.txt'):
+                with open('scores.txt', 'r') as f:
+                    for line in f:
+                        try:
+                            scores.append(int(line.strip()))
+                        except Exception:
+                            continue
+            elif os.path.exists('highscore.txt'):
+                # legacy single-value file
+                try:
+                    with open('highscore.txt', 'r') as f:
+                        v = int(f.read().strip())
+                        scores = [v]
+                except Exception:
+                    scores = []
+
+            self.all_scores = scores
+            self.recent_scores = list(self.all_scores)[:5]
+            self.high_score = max(self.all_scores) if self.all_scores else 0
+        except Exception:
             self.high_score = 0
+            self.recent_scores = []
+            self.all_scores = []
 
     def save_high_score(self):
         try:
+            # also keep a legacy single-value file for compatibility
             with open('highscore.txt', 'w') as f:
                 f.write(str(self.high_score))
-        except:
+        except Exception:
+            pass
+
+    def record_score(self, score):
+        """Record a recently played score (most recent first) and persist to `scores.txt`.
+        Also update `recent_scores` and `high_score`.
+        """
+        try:
+            try:
+                current = []
+                if os.path.exists('scores.txt'):
+                    with open('scores.txt', 'r') as f:
+                        for line in f:
+                            try:
+                                current.append(int(line.strip()))
+                            except Exception:
+                                continue
+            except Exception:
+                current = []
+
+            # insert newest at front
+            current.insert(0, int(score))
+            # keep a reasonable history
+            current = current[:50]
+            with open('scores.txt', 'w') as f:
+                for s in current:
+                    f.write(str(s) + '\n')
+
+            self.all_scores = current
+            self.recent_scores = list(self.all_scores)[:5]
+            self.high_score = max(self.all_scores) if self.all_scores else 0
+            # also update legacy highscore file
+            try:
+                with open('highscore.txt', 'w') as f:
+                    f.write(str(self.high_score))
+            except Exception:
+                pass
+        except Exception:
             pass
         # End of UI module. No top-level pygame.font or draw calls here.

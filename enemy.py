@@ -1,10 +1,16 @@
 import pygame
 import random
 import os 
+import math
 from settings import * # --- 1. KHAI BÁO DANH SÁCH ẢNH (Phải có đủ các dòng này) ---
 enemy_sprites_normal = [] 
 enemy_sprites_mon2_right = [] # Frame 1-6
 enemy_sprites_mon2_left = []  # Frame 7-12
+
+# Separation behaviour: enemies avoid overlapping each other
+# radius in pixels within which separation applies, and force multiplier
+SEPARATION_RADIUS = 48
+SEPARATION_FORCE = 0.9
 
 def load_enemy_sprites():
     global enemy_sprites_normal, enemy_sprites_mon2_right, enemy_sprites_mon2_left
@@ -114,12 +120,46 @@ class Enemy(pygame.sprite.Sprite):
         player_vec = pygame.math.Vector2(self.player.rect.center)
         enemy_vec = pygame.math.Vector2(self.rect.center)
         direction = player_vec - enemy_vec
+        move_vec = pygame.math.Vector2(0, 0)
         if direction.length_squared() > 0:
-            direction = direction.normalize()
-            move_vec = direction * self.speed
-            self.move(move_vec.x, move_vec.y)
-            
-        
+            move_vec = direction.normalize() * self.speed
+
+        # Separation: avoid overlapping other enemies by applying a small repulsion
+        separation = pygame.math.Vector2(0, 0)
+        try:
+            for g in self.groups():
+                for other in g:
+                    if other is self or not isinstance(other, Enemy):
+                        continue
+                    other_vec = pygame.math.Vector2(other.rect.center)
+                    delta = enemy_vec - other_vec
+                    dist2 = delta.length_squared()
+                    if dist2 == 0:
+                        # perfect overlap: nudge randomly
+                        delta = pygame.math.Vector2(random.uniform(-1, 1), random.uniform(-1, 1))
+                        dist2 = 0.01
+                    if dist2 < (SEPARATION_RADIUS * SEPARATION_RADIUS):
+                        # stronger repulsion when closer
+                        try:
+                            rep = delta.normalize() * (SEPARATION_FORCE / max(math.sqrt(dist2), 0.1))
+                            separation += rep
+                        except Exception:
+                            pass
+        except Exception:
+            pass
+
+        final_move = move_vec + separation
+        # cap speed so separation doesn't send them flying
+        try:
+            max_speed = max(self.speed, 0.1) * 1.5
+            if final_move.length_squared() > (max_speed * max_speed):
+                final_move = final_move.normalize() * max_speed
+        except Exception:
+            pass
+
+        # perform movement with collision
+        self.move(final_move.x, final_move.y)
+
         # Nếu là boss, thay sprites trái/phải theo player
         if self.type == "boss":
             if self.player.pos.x > self.pos.x:

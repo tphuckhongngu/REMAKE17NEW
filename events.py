@@ -39,6 +39,12 @@ class EventHandler:
                             self.game.npc.advance()
                     except Exception:
                         pass
+                # F11 toggle fullscreen
+                if event.key == pygame.K_F11:
+                    try:
+                        self.game.toggle_fullscreen()
+                    except Exception:
+                        pass
 
     def handle_mouse_click(self, mx, my):
         state = self.game.game_state
@@ -50,7 +56,18 @@ class EventHandler:
             buttons = self.game.ui.get_menu_button_rects()
             if buttons['restart'].collidepoint(mx, my): # Nút Play
                 SoundManager.play_click_sound()
-                self.game.new_game()
+                # always start main game (not tutorial) when pressing Play
+                self.game.new_game(tutorial=False)
+
+            # training button (màn huấn luyện riêng)
+            elif buttons.get('training') and buttons['training'].collidepoint(mx, my):
+                SoundManager.play_click_sound()
+                try:
+                    # switch to tutorial map and start the training run
+                    self.game.start_training()
+                except Exception:
+                    # fallback: just start a new main game
+                    self.game.new_game(tutorial=False)
 
             elif buttons['quit'].collidepoint(mx, my):  # Nút Quit
                 SoundManager.play_click_sound()
@@ -82,7 +99,7 @@ class EventHandler:
 
             if buttons['restart'].collidepoint(mx, my): # Nút Mũi tên (Chơi lại)
                 SoundManager.play_click_sound()
-                self.game.new_game()
+                self.game.new_game(tutorial=False)
             # Nút Quay về Menu chính
             elif buttons['home'].collidepoint(mx, my):
                 SoundManager.play_click_sound()

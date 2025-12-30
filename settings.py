@@ -5,6 +5,9 @@ WIDTH, HEIGHT = 1280, 720
 FPS = 60
 TITLE = "Top-Down Shooter Team Project"
 
+# Start game in fullscreen (keeps game resolution but uses fullscreen display)
+FULLSCREEN = False
+
 # -------------------- Màu sắc --------------------
 WHITE  = (255, 255, 255)
 BLACK  = (0, 0, 0)
