@@ -47,6 +47,40 @@ class UI:
         self.highscore_rect = self.highscore_img.get_rect(center=(WIDTH // 2, HEIGHT // 2 + 230))
 
         # ==========================================
+        # 1.5 LOAD PROFILE / TRAINING BUTTONS (menu corner)
+        # ==========================================
+        ICON_SIZE = 128
+        def load_icon(name, fallback_color):
+            try:
+                img = load_img('anhgd2', name)
+                img = img.convert_alpha()
+                w, h = img.get_size()
+                # if image is smaller than target, don't upscale to avoid blur: center it
+                if w < ICON_SIZE or h < ICON_SIZE:
+                    surf = pygame.Surface((ICON_SIZE, ICON_SIZE), pygame.SRCALPHA)
+                    surf.fill((0,0,0,0))
+                    # center original image
+                    rect = img.get_rect(center=(ICON_SIZE//2, ICON_SIZE//2))
+                    surf.blit(img, rect)
+                    return surf
+                # otherwise scale smoothly to ICON_SIZE
+                return pygame.transform.smoothscale(img, (ICON_SIZE, ICON_SIZE))
+            except Exception:
+                s = pygame.Surface((ICON_SIZE, ICON_SIZE), pygame.SRCALPHA)
+                s.fill(fallback_color)
+                return s
+
+        self.profile_img = load_icon('profile.png', (80, 80, 80))
+        self.training_img = load_icon('training.png', (100, 100, 100))
+
+        # position: top-right corner, with small margin
+        margin = 12
+        self.profile_rect = self.profile_img.get_rect(topright=(WIDTH - margin, margin))
+        # place training to the left of profile with spacing (bigger icons -> bigger spacing)
+        spacing = 16
+        self.training_rect = self.training_img.get_rect(topright=(self.profile_rect.left - spacing, margin))
+
+        # ==========================================
         # 2. LOAD ẢNH IN-GAME
         # ==========================================
         button_size = 80
@@ -142,6 +176,22 @@ class UI:
         self.screen.blit(self.howto_img, self.howto_rect)
         self.screen.blit(self.quit_img, self.quit_rect)
         self.screen.blit(self.highscore_img, self.highscore_rect)
+        # draw profile and training buttons at top-right with subtle shadow/outline
+        try:
+            for img, rect in ((self.training_img, self.training_rect), (self.profile_img, self.profile_rect)):
+                # shadow
+                shadow = pygame.Surface((rect.w, rect.h), pygame.SRCALPHA)
+                shadow.fill((0,0,0,100))
+                shadow_rect = shadow.get_rect(topleft=(rect.x+3, rect.y+3))
+                self.screen.blit(shadow, shadow_rect)
+                # border
+                try:
+                    pygame.draw.rect(self.screen, (30,30,30), rect, 2)
+                except Exception:
+                    pass
+                self.screen.blit(img, rect)
+        except Exception:
+            pass
 
     def draw_instructions(self):
         if not self.showing_instructions:

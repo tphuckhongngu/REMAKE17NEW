@@ -6,7 +6,7 @@ D = "dat"
 B = "betong"
 W = "nuoc"
 T = "tuong"
-TH = "thung"
+TH = "tuong"
 
 WIDTH = 40
 HEIGHT = 25

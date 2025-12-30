@@ -4,9 +4,7 @@ import pygame
 TILE_SIZE = 64
 
 # Tile chặn di chuyển
-BLOCK_TILES = {"tuong",
-               "thung",
-               }
+BLOCK_TILES = {"tuong"}
 
 class MapManager:
     def __init__(self, tile_folder):
@@ -18,7 +16,7 @@ class MapManager:
         self.load_tiles(tile_folder)
 
     def load_tiles(self, folder):
-        tile_names = ["co", "nuoc", "dat", "betong", "tuong", "thung"]
+        tile_names = ["co", "nuoc", "dat", "betong", "tuong"]
 
         for name in tile_names:
             try:
