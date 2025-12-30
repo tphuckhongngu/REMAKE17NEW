@@ -82,6 +82,14 @@ class EventHandler:
                 self.game.ui.update_rank(self.game.ui.high_score)
                 SoundManager.play_click_sound()
                 self.game.game_state = "HIGHSCORE"
+            elif buttons.get('profile') and buttons['profile'].collidepoint(mx, my):
+                SoundManager.play_click_sound()
+                # open profile/codex screen and start typing first profile
+                try:
+                    self.game.ui.start_profile(0)
+                except Exception:
+                    pass
+                self.game.game_state = "PROFILE"
         
         elif state == "INSTRUCTIONS":
             SoundManager.play_click_sound()
@@ -90,6 +98,39 @@ class EventHandler:
         elif state == "HIGHSCORE":
             SoundManager.play_click_sound()
             self.game.game_state = "MENU"        
+        elif state == "PROFILE":
+            # use UI-provided rects to handle clicks: back button or slot selection
+            rects = self.game.ui.get_profile_click_rects()
+            back = rects.get('back')
+            slots = rects.get('slots', [])
+            # back button
+            if back and back.collidepoint(mx, my):
+                SoundManager.play_click_sound()
+                self.game.game_state = "MENU"
+                return
+            # slot selection
+            for idx, r in enumerate(slots):
+                if r.collidepoint(mx, my):
+                    SoundManager.play_click_sound()
+                    try:
+                        # Move selected profile to front (index 0) so it becomes the large view
+                        if idx != 0 and idx < len(self.game.ui.profiles):
+                            prof = self.game.ui.profiles.pop(idx)
+                            self.game.ui.profiles.insert(0, prof)
+                            self.game.ui.start_profile(0)
+                        else:
+                            # already front or invalid index
+                            self.game.ui.start_profile(idx)
+
+                        # if the selected profile has no description, show placeholder message
+                        if not self.game.ui.profiles[0].get('desc'):
+                            self.game.ui.profile_full_text = 'NPC còn lại đang chờ bạn khám phá!'
+                            self.game.ui.profile_display_text = ''
+                            self.game.ui.profile_char_index = 0
+                            self.game.ui.profile_typing_timer = 0
+                    except Exception:
+                        pass
+                    return
         # =================================================
         # 2. MÀN HÌNH THUA (GAME_OVER) - (2 Nút: Quit, Restart)
         # =================================================

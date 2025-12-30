@@ -184,6 +184,35 @@ class Player(pygame.sprite.Sprite):
         if self.ammo <= 0:
             self.start_reload()
 
+    def draw_health(self, screen):
+        # draw health bar at top-left, red fill and centered HP text
+        hud_x = 12
+        hud_y = 12
+        bar_w = 220
+        bar_h = 18
+        try:
+            max_hp = PLAYER_HP
+        except Exception:
+            max_hp = 100
+        hp_frac = max(0.0, min(1.0, self.health / float(max_hp) if max_hp else 0.0))
+
+        # background and outer border
+        pygame.draw.rect(screen, (20, 20, 20), (hud_x-2, hud_y-2, bar_w+4, bar_h+4))
+        pygame.draw.rect(screen, (30, 30, 30), (hud_x, hud_y, bar_w, bar_h))
+
+        # red fill
+        fill_w = int(bar_w * hp_frac)
+        pygame.draw.rect(screen, (200, 60, 60), (hud_x, hud_y, fill_w, bar_h))
+        pygame.draw.rect(screen, (200, 200, 200), (hud_x, hud_y, bar_w, bar_h), 2)
+
+        # centered HP text
+        try:
+            txt = self.font.render(f"{int(self.health)}/{int(max_hp)}", True, (255, 255, 255))
+            txt_rect = txt.get_rect(center=(hud_x + bar_w//2, hud_y + bar_h//2))
+            screen.blit(txt, txt_rect)
+        except Exception:
+            pass
+
 
     # -------- rotation --------
     def rotate_towards_mouse(self):
@@ -205,25 +234,38 @@ class Player(pygame.sprite.Sprite):
 
     # -------- HUD drawing --------
     def draw_ammo(self, screen):
-        hud_x = 220   # dời sang phải, tránh HUD máu
-        hud_y = 10
-
-        if self.reloading:
-            text_surf = self.font.render("Reloading...", True, (255, 100, 100))
-        else:
-            text_surf = self.font.render(f"Ammo: {self.ammo}/{self.max_ammo}", True, (255, 255, 255))
-
-        screen.blit(text_surf, (hud_x, hud_y))
-
+        # Place ammo bar below the health bar, avoid overlap
+        hud_x = 12
+        hud_y = 12
+        bar_w = 220
+        bar_h = 18
+        gap = 12
         bar_x = hud_x
-        bar_y = hud_y + 30
-        bar_w = 180
-        bar_h = 12
+        bar_y = hud_y + bar_h + gap
 
-        pygame.draw.rect(screen, (60, 60, 60), (bar_x, bar_y, bar_w, bar_h))
-        fill_w = int(bar_w * (self.ammo / self.max_ammo))
-        pygame.draw.rect(screen, (80, 200, 120), (bar_x, bar_y, fill_w, bar_h))
+        # background
+        pygame.draw.rect(screen, (20, 20, 20), (bar_x-2, bar_y-2, bar_w+4, bar_h+4))
+        pygame.draw.rect(screen, (30, 30, 30), (bar_x, bar_y, bar_w, bar_h))
+
+        # ammo fill (blue)
+        try:
+            frac = max(0.0, min(1.0, float(self.ammo) / float(self.max_ammo)))
+        except Exception:
+            frac = 0.0
+        fill_w = int(bar_w * frac)
+        pygame.draw.rect(screen, (60, 140, 220), (bar_x, bar_y, fill_w, bar_h))
         pygame.draw.rect(screen, (200, 200, 200), (bar_x, bar_y, bar_w, bar_h), 2)
+
+        # ammo text centered
+        try:
+            if self.reloading:
+                txt = self.font.render("Reloading...", True, (255, 100, 100))
+            else:
+                txt = self.font.render(f"{int(self.ammo)}/{int(self.max_ammo)}", True, (255, 255, 255))
+            txt_rect = txt.get_rect(center=(bar_x + bar_w//2, bar_y + bar_h//2))
+            screen.blit(txt, txt_rect)
+        except Exception:
+            pass
 
 
     def move(self, dx, dy):

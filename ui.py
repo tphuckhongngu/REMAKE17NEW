@@ -11,8 +11,37 @@ def load_img(*path):
 class UI:
     def __init__(self, screen):
         self.screen = screen
-        self.font = pygame.font.SysFont(None, 48)
-        self.small_font = pygame.font.SysFont(None, 32)
+        # Prefer a bundled font that includes Vietnamese glyphs (DejaVu Sans),
+        # fall back to common system fonts then to default.
+        try:
+            fonts_dir = os.path.join(BASE_DIR, 'fonts')
+            bundled = os.path.join(fonts_dir, 'DejaVuSans.ttf')
+            if os.path.exists(bundled):
+                try:
+                    self.font = pygame.font.Font(bundled, 48)
+                    self.small_font = pygame.font.Font(bundled, 32)
+                except Exception:
+                    self.font = pygame.font.SysFont('arial', 48)
+                    self.small_font = pygame.font.SysFont('arial', 32)
+            else:
+                # try common system fonts
+                found = False
+                for name in ("segoeui", "tahoma", "arial", "dejavusans"):
+                    path = pygame.font.match_font(name)
+                    if path:
+                        try:
+                            self.font = pygame.font.Font(path, 48)
+                            self.small_font = pygame.font.Font(path, 32)
+                            found = True
+                            break
+                        except Exception:
+                            continue
+                if not found:
+                    self.font = pygame.font.SysFont(None, 48)
+                    self.small_font = pygame.font.SysFont(None, 32)
+        except Exception:
+            self.font = pygame.font.SysFont(None, 48)
+            self.small_font = pygame.font.SysFont(None, 32)
         self.score = 0
         self.high_score = 0
         # recent scores (most recent first)
@@ -115,7 +144,17 @@ class UI:
             self.rect_restart_over = self.btn_restart_over.get_rect(bottomright=(WIDTH - 50, HEIGHT - 50))
 
             img_home = load_img('anhgd2', 'mainmenu.png')
-            self.btn_home_over = pygame.transform.scale(img_home, (200, 200))
+            # make the main menu/home button brighter and twice as large
+            try:
+                # scale up to double size (was 200x200 -> now 400x400)
+                bright = pygame.transform.smoothscale(img_home, (400, 400))
+                # create a light overlay and add it to brighten the image
+                overlay = pygame.Surface(bright.get_size())
+                overlay.fill((60, 60, 60))
+                bright.blit(overlay, (0, 0), special_flags=pygame.BLEND_RGB_ADD)
+                self.btn_home_over = bright
+            except Exception:
+                self.btn_home_over = pygame.transform.scale(img_home, (400, 400))
             self.rect_home_over = self.btn_home_over.get_rect(midbottom=(WIDTH // 2, HEIGHT - 10))
         except Exception as e:
             print(f"Lỗi tải ảnh Game Over: {e}")
@@ -148,6 +187,41 @@ class UI:
                     print(f"Thiếu file: ranks/rank{i}.png")
         except Exception as e:
             print(f"Lỗi load rank images: {e}")
+
+        # ================= PROFILES / CHARACTER CODex =================
+        # Load profiles from separate module so they can be edited later
+        try:
+            from profilenpc import PROFILES as _PROFILES
+        except Exception:
+            _PROFILES = []
+
+        self.profiles = []
+        for p in _PROFILES:
+            prof = {'name': p.get('name', '???'), 'desc': p.get('desc', ''), 'portrait': None}
+            portrait = p.get('portrait')
+            if portrait:
+                try:
+                    # portrait may be tuple like ('npc','anhnpc.png') or string
+                    if isinstance(portrait, (list, tuple)):
+                        img = load_img(*portrait)
+                    else:
+                        img = load_img(portrait)
+                    prof['portrait'] = img
+                except Exception:
+                    prof['portrait'] = None
+            self.profiles.append(prof)
+
+        # ensure we always have 5 slots
+        while len(self.profiles) < 5:
+            self.profiles.append({'name': '???', 'desc': '', 'portrait': None})
+
+        # Profile typing state (for description typewriter)
+        self.profile_selected = 0
+        self.profile_full_text = ''
+        self.profile_display_text = ''
+        self.profile_char_index = 0
+        self.profile_typing_timer = 0
+        self.profile_typing_delay = 2
 
     def get_rank_index(self, score):
         if score < 100:
@@ -245,75 +319,176 @@ class UI:
         except Exception:
             pass
 
-    def draw_ingame_buttons(self):
-        self.screen.blit(self.backhome_img, self.backhome_rect)
-        self.screen.blit(self.pause_img, self.pause_rect)
-        self.screen.blit(self.mute_img, self.mute_rect)
-
-    def draw_hud(self, health, ammo=None, max_ammo=None):
-        """Draw health bar, score, and optionally ammo count/bar.
-        Place HP and ammo next to each other at top-left to avoid overlapping top-right buttons.
-        """
-        # left padding; nudge vertical down slightly to avoid cutting off text
-        base_x = 12
-        base_y = 28
-
-        # HP bar (left)
-        hp_bar_w = 180
-        hp_bar_h = 18
+    def draw_profile_screen(self):
         try:
-            hp = max(0, min(health, 100)) if isinstance(health, (int, float)) else 0
-            pygame.draw.rect(self.screen, (60, 60, 60), (base_x, base_y, hp_bar_w, hp_bar_h))
-            fill_w = int(hp_bar_w * (hp / 100.0))
-            pygame.draw.rect(self.screen, (200, 50, 50), (base_x, base_y, fill_w, hp_bar_h))
-            pygame.draw.rect(self.screen, (220, 220, 220), (base_x, base_y, hp_bar_w, hp_bar_h), 2)
-            hp_text = self.small_font.render(f"HP: {int(hp)}", True, WHITE)
-            # place numeric just above the HP bar
-            self.screen.blit(hp_text, (base_x + 6, base_y - hp_text.get_height() - 2))
-        except Exception:
+            overlay = pygame.Surface((WIDTH, HEIGHT))
+            overlay.fill((0, 0, 0))
+            overlay.set_alpha(210)
+            self.screen.blit(overlay, (0, 0))
+
+            # panel background
+            panel_w = WIDTH - 120
+            panel_h = HEIGHT - 140
+            panel_x = 60
+            panel_y = 70
+            panel = pygame.Surface((panel_w, panel_h), pygame.SRCALPHA)
+            panel.fill((18, 18, 18, 240))
+            pygame.draw.rect(panel, (200, 200, 200), (0, 0, panel_w, panel_h), 2)
+
+            # Title removed per request (previously 'Character Codex')
+
+            # selected profile large view
+            sel = max(0, min(self.profile_selected, len(self.profiles)-1))
+            p = self.profiles[sel]
+
+            # left portrait area (large)
+            por_w = 320
+            por_h = 320
+            por_x = 40
+            por_y = 60
+            por_rect = pygame.Rect(por_x, por_y, por_w, por_h)
+            pygame.draw.rect(panel, (40,40,40), por_rect)
+            pygame.draw.rect(panel, (150,150,150), por_rect, 2)
+            if p.get('portrait'):
+                try:
+                    img = pygame.transform.smoothscale(p['portrait'], (por_w-12, por_h-12))
+                    panel.blit(img, (por_x+6, por_y+6))
+                except Exception:
+                    qm = self.font.render('?', True, (200,200,200))
+                    panel.blit(qm, (por_x + (por_w-qm.get_width())//2, por_y + (por_h-qm.get_height())//2))
+            else:
+                qm = self.font.render('?', True, (200,200,200))
+                panel.blit(qm, (por_x + (por_w-qm.get_width())//2, por_y + (por_h-qm.get_height())//2))
+
+            # right description area with typewriter
+            desc_x = por_x + por_w + 30
+            desc_y = por_y
+            desc_w = panel_w - desc_x - 40
+            # typing logic
+            if self.profile_full_text != p.get('desc', ''):
+                self.profile_full_text = p.get('desc', '')
+                self.profile_display_text = ''
+                self.profile_char_index = 0
+                self.profile_typing_timer = 0
+            else:
+                self.profile_typing_timer += 1
+                if self.profile_typing_timer >= self.profile_typing_delay:
+                    self.profile_typing_timer = 0
+                    if self.profile_char_index < len(self.profile_full_text):
+                        self.profile_char_index += 1
+                        self.profile_display_text = self.profile_full_text[:self.profile_char_index]
+
+            name_s = self.font.render(p.get('name', '???'), True, (220,200,60))
+            panel.blit(name_s, (desc_x, desc_y))
+
+            # wrap and draw profile_display_text
             try:
-                hp_text = self.small_font.render(f"HP: {health}", True, WHITE)
-                self.screen.blit(hp_text, (base_x, base_y))
+                text = self.profile_display_text or ''
+                words = text.split(' ')
+                cur = ''
+                lines = []
+                for w in words:
+                    test = (cur + ' ' + w).strip()
+                    ts = self.small_font.render(test, True, (220,220,220))
+                    if ts.get_width() > desc_w:
+                        if cur:
+                            lines.append(cur)
+                        cur = w
+                    else:
+                        cur = test
+                if cur:
+                    lines.append(cur)
+                ty = desc_y + name_s.get_height() + 12
+                for i, line in enumerate(lines[:10]):
+                    panel.blit(self.small_font.render(line, True, (220,220,220)), (desc_x, ty + i * (self.small_font.get_height() + 6)))
             except Exception:
                 pass
 
-        # Ammo bar (to the right of HP)
-        if ammo is not None and max_ammo is not None:
+            # thumbnails for other profiles below portrait (show image if available)
             try:
-                gap = 12
-                am_x = base_x + hp_bar_w + gap
-                am_y = base_y
-                am_text = self.small_font.render(f"Ammo: {int(ammo)}/{int(max_ammo)}", True, (255, 255, 255))
-                # text above ammo bar
-                self.screen.blit(am_text, (am_x, am_y - am_text.get_height() - 2))
-                am_bar_w = 140
-                am_bar_h = 12
-                pygame.draw.rect(self.screen, (60, 60, 60), (am_x, am_y, am_bar_w, am_bar_h))
-                fill_aw = int(am_bar_w * (max(0, ammo) / max(1, max_ammo)))
-                pygame.draw.rect(self.screen, (80, 200, 120), (am_x, am_y, fill_aw, am_bar_h))
-                pygame.draw.rect(self.screen, (200, 200, 200), (am_x, am_y, am_bar_w, am_bar_h), 2)
+                ph_x = por_x
+                ph_y = por_y + por_h + 24
+                ph_size = 96
+                gap = 18
+                for i in range(1,5):
+                    px = ph_x + (i-1) * (ph_size + gap)
+                    pygame.draw.rect(panel, (30,30,30), (px, ph_y, ph_size, ph_size))
+                    pygame.draw.rect(panel, (120,120,120), (px, ph_y, ph_size, ph_size), 1)
+                    # get profile index i (if exists)
+                    try:
+                        psmall = self.profiles[i]
+                    except Exception:
+                        psmall = None
+                    if psmall and psmall.get('portrait'):
+                        try:
+                            timg = pygame.transform.smoothscale(psmall['portrait'], (ph_size-8, ph_size-8))
+                            panel.blit(timg, (px+4, ph_y+4))
+                        except Exception:
+                            qm = self.font.render('?', True, (200,200,200))
+                            panel.blit(qm, (px + (ph_size - qm.get_width())//2, ph_y + (ph_size - qm.get_height())//2))
+                    else:
+                        qm = self.font.render('?', True, (200,200,200))
+                        panel.blit(qm, (px + (ph_size - qm.get_width())//2, ph_y + (ph_size - qm.get_height())//2))
             except Exception:
                 pass
 
-        # score center-top
-        try:
-            score_text = self.small_font.render(f"SCORE: {self.score}", True, YELLOW)
-            self.screen.blit(score_text, (WIDTH // 2 - score_text.get_width() // 2, base_y))
+            # prepare clickable rects (absolute coordinates)
+            try:
+                # back button (use home image scaled)
+                try:
+                    back_size = 96
+                    back_img = pygame.transform.smoothscale(self.btn_home_over, (back_size, back_size))
+                except Exception:
+                    back_img = None
+                    back_size = 64
+                back_x = panel_x + panel_w - (back_size + 20)
+                back_y = panel_y + 12
+                if back_img is not None:
+                    panel.blit(back_img, (back_x - panel_x, back_y - panel_y))
+                self.profile_back_rect = pygame.Rect(back_x, back_y, back_size, back_size)
+
+                # slot rects: index 0 = large portrait, 1-4 = small placeholders
+                slot_rects = []
+                # portrait rect absolute
+                slot_rects.append(pygame.Rect(panel_x + por_x, panel_y + por_y, por_w, por_h))
+                ph_x = por_x
+                ph_y = por_y + por_h + 24
+                ph_size = 96
+                gap = 18
+                for i in range(1,5):
+                    px = panel_x + ph_x + (i-1) * (ph_size + gap)
+                    py = panel_y + ph_y
+                    slot_rects.append(pygame.Rect(px, py, ph_size, ph_size))
+                self.profile_slot_rects = slot_rects
+
+            except Exception:
+                self.profile_back_rect = None
+                self.profile_slot_rects = []
+
+            # blit panel
+            self.screen.blit(panel, (panel_x, panel_y))
         except Exception:
             pass
 
-    def draw_game_over(self):
-        self.screen.blit(self.defeat_bg, (0, 0))
-        
-        self.screen.blit(self.btn_quit_over, self.rect_quit_over)
-        self.screen.blit(self.btn_home_over, self.rect_home_over)
-        self.screen.blit(self.btn_restart_over, self.rect_restart_over)
-        
-        score_text = self.font.render(f"Final Score: {self.score}", True, (255, 255, 255))
-        score_rect = score_text.get_rect(center=(WIDTH // 2, HEIGHT // 2 + 50))
-        self.screen.blit(score_text, score_rect)
+    def start_profile(self, index=0):
+        try:
+            self.profile_selected = max(0, min(index, len(self.profiles)-1))
+            self.profile_full_text = self.profiles[self.profile_selected].get('desc', '')
+            self.profile_display_text = ''
+            self.profile_char_index = 0
+            self.profile_typing_timer = 0
+        except Exception:
+            pass
 
-    
+    def get_profile_click_rects(self):
+        """Return dict with clickable rects on the profile screen: 'back' and 'slots' list.
+        Must be called after draw_profile_screen was used (rects are stored on the UI instance).
+        """
+        out = {
+            'back': getattr(self, 'profile_back_rect', None),
+            'slots': getattr(self, 'profile_slot_rects', [])
+        }
+        return out
 
     # ================= SLIDESHOW INSTRUCTIONS =================
     def start_instructions(self):
@@ -334,6 +509,7 @@ class UI:
             'highscore': self.highscore_rect,
             'restart': self.restart_rect,
             'training': self.training_rect,
+            'profile': self.profile_rect,
             'howto': self.howto_rect,
             'quit': self.quit_rect
         }
@@ -351,6 +527,39 @@ class UI:
             'home': self.rect_home_over,
             'restart': self.rect_restart_over
         }
+
+    # ================= IN-GAME HUD & BUTTONS =================
+    def draw_hud(self, health, ammo=None, max_ammo=None):
+        try:
+            # Only draw the score label here; detailed health/ammo are drawn by Player methods
+            try:
+                score_s = self.small_font.render(f"Score: {int(self.score)}", True, (240, 220, 60))
+                self.screen.blit(score_s, score_s.get_rect(midtop=(WIDTH//2, 12)))
+            except Exception:
+                pass
+        except Exception:
+            pass
+
+    def draw_ingame_buttons(self):
+        try:
+            # draw right-side buttons: backhome, pause, mute
+            try:
+                if getattr(self, 'backhome_img', None) and getattr(self, 'backhome_rect', None):
+                    self.screen.blit(self.backhome_img, self.backhome_rect)
+            except Exception:
+                pass
+            try:
+                if getattr(self, 'pause_img', None) and getattr(self, 'pause_rect', None):
+                    self.screen.blit(self.pause_img, self.pause_rect)
+            except Exception:
+                pass
+            try:
+                if getattr(self, 'mute_img', None) and getattr(self, 'mute_rect', None):
+                    self.screen.blit(self.mute_img, self.mute_rect)
+            except Exception:
+                pass
+        except Exception:
+            pass
 
     # ================= HIGH SCORE SAVE / LOAD =================
     def load_high_score(self):

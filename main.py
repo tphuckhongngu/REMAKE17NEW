@@ -710,6 +710,10 @@ class Game:
             self.ui.draw_highscore_screen()
             pygame.display.flip()
             return
+        if self.game_state == "PROFILE":
+            self.ui.draw_profile_screen()
+            pygame.display.flip()
+            return
 
         # PLAYING
         self.screen.fill((30, 30, 30))
@@ -788,7 +792,17 @@ class Game:
             # draw HUD: include ammo when player present
             if self.player is not None:
                 try:
+                    # draw UI HUD (score etc.) then draw player's detailed HUD visuals
                     self.ui.draw_hud(self.player.health, ammo=getattr(self.player, 'ammo', None), max_ammo=getattr(self.player, 'max_ammo', None))
+                    try:
+                        # re-enable old player HUD visuals
+                        self.player.draw_health(self.screen)
+                    except Exception:
+                        pass
+                    try:
+                        self.player.draw_ammo(self.screen)
+                    except Exception:
+                        pass
                 except Exception:
                     self.ui.draw_hud(self.player.health)
             else:
