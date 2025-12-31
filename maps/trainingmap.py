@@ -1,6 +1,7 @@
-# maps/tutorial_map.py
+# maps/trainingmap.py
 
-# Các khoá tên tile
+# Training/tutorial map layout and spawn definitions.
+
 C = "co"
 D = "dat"
 B = "betong"
@@ -68,7 +69,6 @@ for cx, cy in crate_positions:
 MAP_ROWS = len(MAP_LAYOUT)
 
 # Ensure NPC spawn (and the tile to its right where the player spawns) are clear
-# NPC expected at (6,5) by main.py; free (6,5) and (7,5) so NPC/player are not blocked by enclosure.
 NPC_SPAWN = (6, 5)
 px, py = NPC_SPAWN
 if 0 <= py < HEIGHT and 0 <= px < WIDTH:

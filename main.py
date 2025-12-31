@@ -13,10 +13,11 @@ from sounds import SoundManager
 from enemy import Enemy, Monster2, load_enemy_sprites
 from camera import Camera
 from maps.map_manager import MapManager
-from maps import tutorial_map
-from maps import complex_map
+from maps import trainingmap
+from maps import mainmap
 from npc import NPC
 from item import HealItem
+from teleport_gate import TeleportGate
 # skill UI disabled: no on-screen skill panel or bullets HUD
 
 # tinh chỉnh spawn (pixel)
@@ -49,8 +50,8 @@ class Game:
         # default: load main complex map. Training/tutorial will be loaded
         # when user clicks the training button from menu.
         try:
-            self.map_manager.layout = complex_map.MAP_LAYOUT
-            self.map_manager.build_collision(complex_map.MAP_LAYOUT)
+            self.map_manager.layout = mainmap.MAP_LAYOUT
+            self.map_manager.build_collision(mainmap.MAP_LAYOUT)
             self.tutorial_mode = False
         except Exception:
             # fallback minimal empty layout
@@ -108,6 +109,8 @@ class Game:
         self.bullets = pygame.sprite.Group()
         self.enemies = pygame.sprite.Group()
         self.npcs = pygame.sprite.Group()
+        # teleport gates (created for main map only)
+        self.gates = pygame.sprite.Group()
 
         # event handler (nếu bạn có class này)
         self.event_handler = EventHandler(self)
@@ -208,6 +211,10 @@ class Game:
         self.bullets.empty()
         self.enemies.empty()
         self.npcs.empty()
+        try:
+            self.gates.empty()
+        except Exception:
+            pass
         self.practice_started = False
         self.tutorial_followup_done = False
         self.training_started = False
@@ -227,14 +234,14 @@ class Game:
         # ensure correct map is loaded for chosen mode
         if self.tutorial_mode:
             try:
-                self.map_manager.layout = tutorial_map.MAP_LAYOUT
-                self.map_manager.build_collision(tutorial_map.MAP_LAYOUT)
+                self.map_manager.layout = trainingmap.MAP_LAYOUT
+                self.map_manager.build_collision(trainingmap.MAP_LAYOUT)
             except Exception:
                 pass
         else:
             try:
-                self.map_manager.layout = complex_map.MAP_LAYOUT
-                self.map_manager.build_collision(complex_map.MAP_LAYOUT)
+                self.map_manager.layout = mainmap.MAP_LAYOUT
+                self.map_manager.build_collision(mainmap.MAP_LAYOUT)
             except Exception:
                 pass
             # explicitly remove any tutorial NPC so player enters immediately
@@ -308,6 +315,37 @@ class Game:
         except Exception:
             pass
 
+        # create teleport gates only for main (non-tutorial) map
+        try:
+            self.gates.empty()
+            if not getattr(self, 'tutorial_mode', False):
+                # determine tile size and layout size
+                try:
+                    sample_img = next(iter(self.map_manager.tiles.values()))
+                    tile_size = sample_img.get_width()
+                except Exception:
+                    tile_size = 64
+                rows = len(getattr(self.map_manager, 'layout', []))
+                cols = len(getattr(self.map_manager, 'layout', [[]])[0]) if rows > 0 else 0
+
+                # choose four corner-ish cells (keep inside bounds)
+                corners = []
+                if cols >= 3 and rows >= 3:
+                    corners = [(1, 1), (cols - 2, 1), (1, rows - 2), (cols - 2, rows - 2)]
+                else:
+                    corners = [(1, 1), (1, 1), (1, 1), (1, 1)]
+
+                for tx, ty in corners:
+                    x = tx * tile_size + tile_size // 2
+                    y = ty * tile_size + tile_size // 2
+                    # flip horizontally for gates on the right half
+                    flip = True if tx > (cols // 2) else False
+                    g = TeleportGate((x, y), flip_horiz=flip)
+                    self.gates.add(g)
+                    self.all_sprites.add(g)
+        except Exception:
+            pass
+
         # đổi state + âm thanh
         self.game_state = "PLAYING"
         SoundManager.stop_music()
@@ -329,10 +367,10 @@ class Game:
             self.npc = None
 
     def switch_to_main_map(self):
-        """Chuyển từ tutorial sang màn chính (complex_map)."""
+        """Chuyển từ tutorial sang màn chính (mainmap)."""
         try:
-            self.map_manager.layout = complex_map.MAP_LAYOUT
-            self.map_manager.build_collision(complex_map.MAP_LAYOUT)
+            self.map_manager.layout = mainmap.MAP_LAYOUT
+            self.map_manager.build_collision(mainmap.MAP_LAYOUT)
         except Exception:
             return
         self.tutorial_mode = False
@@ -342,8 +380,8 @@ class Game:
     def start_training(self):
         """Load tutorial map and start training run immediately."""
         try:
-            self.map_manager.layout = tutorial_map.MAP_LAYOUT
-            self.map_manager.build_collision(tutorial_map.MAP_LAYOUT)
+            self.map_manager.layout = trainingmap.MAP_LAYOUT
+            self.map_manager.build_collision(trainingmap.MAP_LAYOUT)
             self.tutorial_mode = True
         except Exception:
             return
@@ -355,7 +393,7 @@ class Game:
 
         # Immediately pre-place training enemies inside enclosure (they are trapped until gate opens)
         try:
-            spawns = getattr(tutorial_map, 'TRAINING_SPAWNS', None)
+            spawns = getattr(trainingmap, 'TRAINING_SPAWNS', None)
             tile_size = 64
             try:
                 sample_img = next(iter(self.map_manager.tiles.values()))
@@ -373,6 +411,7 @@ class Game:
                 total_m2 = 5
                 used_positions = set()
                 idx = 0
+
                 # helper to get unique center with small jitter if necessary
                 def get_center(sx, sy):
                     base_x = sx * tile_size + tile_size // 2
@@ -502,7 +541,7 @@ class Game:
         if self.training_started and not getattr(self, 'training_enemies_created', False):
             try:
                 # create enemies at training spawn points so they are pre-placed inside the enclosure
-                spawns = getattr(tutorial_map, 'TRAINING_SPAWNS', None)
+                spawns = getattr(trainingmap, 'TRAINING_SPAWNS', None)
                 tile_size = 64
                 try:
                     sample_img = next(iter(self.map_manager.tiles.values()))
@@ -571,7 +610,7 @@ class Game:
                 if release_line and getattr(self, 'npc', None) is not None:
                     # open gate only when NPC finished typing that exact line
                     if getattr(self.npc, 'waiting_for_input', False) and getattr(self.npc, 'full_text', '') == release_line:
-                        enclosure = getattr(tutorial_map, 'ENCLOSURE_WALLS', None)
+                        enclosure = getattr(trainingmap, 'ENCLOSURE_WALLS', None)
                         if enclosure:
                             for gx, gy in enclosure:
                                 try:
@@ -906,10 +945,21 @@ class Game:
         if not self.has_played_begin_sound:
             SoundManager.play_begin_sound()
             self.has_played_begin_sound = True
-        spawn_pos = self.find_free_tile_center(
-            avoid_pos=self.player.rect.center if self.player else None,
-            min_dist=ENEMY_SPAWN_MIN_DIST
-        )
+        # if teleport gates exist (main map), spawn at a random gate center
+        spawn_pos = None
+        try:
+            gates_list = list(self.gates.sprites()) if hasattr(self, 'gates') else []
+            if gates_list:
+                g = random.choice(gates_list)
+                spawn_pos = g.get_spawn_pos()
+        except Exception:
+            spawn_pos = None
+
+        if spawn_pos is None:
+            spawn_pos = self.find_free_tile_center(
+                avoid_pos=self.player.rect.center if self.player else None,
+                min_dist=ENEMY_SPAWN_MIN_DIST
+            )
         enemy = Enemy(self.player, map_manager=self.map_manager)
         enemy.rect.center = spawn_pos
         enemy.pos = pygame.Vector2(spawn_pos)
