@@ -194,6 +194,43 @@ class UI:
             self.defeat_bg = pygame.Surface((WIDTH, HEIGHT))
             self.defeat_bg.fill((50, 0, 0))
 
+        # Ensure game-over button surfaces and rects exist even if image loading failed
+        try:
+            if not hasattr(self, 'btn_quit_over') or self.btn_quit_over is None:
+                s = pygame.Surface((100, 100), pygame.SRCALPHA)
+                s.fill((120, 20, 20))
+                self.btn_quit_over = s
+                self.rect_quit_over = s.get_rect(bottomleft=(50, HEIGHT - 50))
+        except Exception:
+            try:
+                self.rect_quit_over = pygame.Rect(50, HEIGHT - 150, 100, 100)
+            except Exception:
+                self.rect_quit_over = None
+
+        try:
+            if not hasattr(self, 'btn_restart_over') or self.btn_restart_over is None:
+                s = pygame.Surface((100, 100), pygame.SRCALPHA)
+                s.fill((20, 120, 20))
+                self.btn_restart_over = s
+                self.rect_restart_over = s.get_rect(bottomright=(WIDTH - 50, HEIGHT - 50))
+        except Exception:
+            try:
+                self.rect_restart_over = pygame.Rect(WIDTH - 150, HEIGHT - 150, 100, 100)
+            except Exception:
+                self.rect_restart_over = None
+
+        try:
+            if not hasattr(self, 'btn_home_over') or self.btn_home_over is None:
+                s = pygame.Surface((200, 200), pygame.SRCALPHA)
+                s.fill((60, 60, 140))
+                self.btn_home_over = s
+                self.rect_home_over = s.get_rect(midbottom=(WIDTH // 2, HEIGHT - 10))
+        except Exception:
+            try:
+                self.rect_home_over = pygame.Rect((WIDTH // 2) - 100, HEIGHT - 210, 200, 200)
+            except Exception:
+                self.rect_home_over = None
+
         # ==========================================
         # 4. SLIDESHOW INSTRUCTIONS
         # ==========================================
@@ -567,6 +604,62 @@ class UI:
             'home': self.rect_home_over,
             'restart': self.rect_restart_over
         }
+
+    def draw_game_over(self):
+        """Draw the game over / defeat screen. Safe if images/rects missing."""
+        try:
+            # background (full-screen defeat image if available)
+            try:
+                self.screen.blit(self.defeat_bg, (0, 0))
+            except Exception:
+                try:
+                    bg = pygame.Surface((WIDTH, HEIGHT))
+                    bg.fill((30, 0, 0))
+                    self.screen.blit(bg, (0, 0))
+                except Exception:
+                    pass
+
+            # dark overlay for readability
+            try:
+                overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+                overlay.fill((0, 0, 0, 160))
+                self.screen.blit(overlay, (0, 0))
+            except Exception:
+                pass
+
+            # Title intentionally omitted per user request
+
+            # Score
+            try:
+                score_s = self.small_font.render(f"Score: {int(self.score)}", True, (255, 255, 255))
+                self.screen.blit(score_s, score_s.get_rect(center=(WIDTH // 2, HEIGHT // 2 - 60)))
+            except Exception:
+                pass
+
+            # draw buttons: quit (bottom-left), restart (bottom-right), home (center-bottom)
+            try:
+                if getattr(self, 'btn_quit_over', None) and getattr(self, 'rect_quit_over', None):
+                    self.screen.blit(self.btn_quit_over, self.rect_quit_over)
+            except Exception:
+                pass
+            try:
+                if getattr(self, 'btn_restart_over', None) and getattr(self, 'rect_restart_over', None):
+                    self.screen.blit(self.btn_restart_over, self.rect_restart_over)
+            except Exception:
+                pass
+            try:
+                if getattr(self, 'btn_home_over', None) and getattr(self, 'rect_home_over', None):
+                    self.screen.blit(self.btn_home_over, self.rect_home_over)
+            except Exception:
+                pass
+
+            # helper hint intentionally removed per user request
+        except Exception:
+            # last-resort fallback: leave screen blank (avoid printing GAME OVER)
+            try:
+                self.screen.fill((0, 0, 0))
+            except Exception:
+                pass
 
     # ================= IN-GAME HUD & BUTTONS =================
     def draw_hud(self, health, ammo=None, max_ammo=None):
