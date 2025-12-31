@@ -93,6 +93,10 @@ class EventHandler:
                 SoundManager.play_click_sound()
                 ui.update_rank(ui.high_score)
                 self.game.game_state = "HIGHSCORE"
+                if not self.game.ui.has_played_highscore_sound:
+                    SoundManager.play_highscore_sound()
+                    self.game.ui.has_played_highscore_sound = True
+                    
 
             elif buttons['profile'].collidepoint(mx, my):  # Profile / Codex
                 SoundManager.play_click_sound()
@@ -113,7 +117,7 @@ class EventHandler:
         elif state == "HIGHSCORE":
             SoundManager.play_click_sound()
             self.game.game_state = "MENU"
-
+            self.game.ui.has_played_highscore_sound = False
         # =================================================
         # 4. PROFILE / CHARACTER CODEX
         # =================================================
