@@ -170,3 +170,6 @@ class SoundManager:
         if SoundManager.hurt_sound:
             if not pygame.mixer.Channel(6).get_busy(): 
                 pygame.mixer.Channel(6).play(SoundManager.hurt_sound)
+    @staticmethod
+    def play_highscore_sound():
+        SoundManager.highscore_sound.play()
