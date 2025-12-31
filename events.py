@@ -21,9 +21,19 @@ class EventHandler:
 
             # CLICK CHUỘT TRÁI
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                mx, my = event.pos
-                self.handle_mouse_click(mx, my)
+                # 1. Nếu đang PAUSE: Chỉ xử lý các nút của màn hình Pause
+                if getattr(self.game.ui, "is_paused", False):
+                    if hasattr(self.game.ui, 'continue_btn_rect'):
+                        if self.game.ui.continue_btn_rect.collidepoint(event.pos):
+                            self.game.ui.is_paused = False
+                            SoundManager.play_click_sound()
+                            # Dùng return hoặc else để không chạy tiếp xuống handle_mouse_click
+                            return 
 
+                # 2. Nếu KHÔNG PAUSE (hoặc không bấm trúng nút): Xử lý click bình thường
+                if not getattr(self.game.ui, "is_paused", False):
+                    mx, my = event.pos
+                    self.handle_mouse_click(mx, my)
             # NHẤN PHÍM
             if event.type == pygame.KEYDOWN:
                 # ESC: quay về menu từ instructions hoặc pause trong game
@@ -178,6 +188,8 @@ class EventHandler:
         # 6. PLAYING (trong game)
         # =================================================
         elif state == "PLAYING":
+            if self.game.ui.is_paused:
+                return  # Nếu đang pause, không xử lý các nút ingame
             buttons = self.game.ui.get_ingame_button_rects()
 
             if buttons['backhome'].collidepoint(mx, my):

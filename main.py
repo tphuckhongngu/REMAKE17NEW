@@ -829,8 +829,12 @@ class Game:
                 try:
                     pause_text = self.ui.font.render("PAUSED", True, (255, 255, 255))
                     self.screen.blit(pause_text, pause_text.get_rect(center=(WIDTH // 2, HEIGHT // 2)))
+                                    
                 except Exception:
                     pass
+                    # VẼ NÚT CONTINUE
+                if hasattr(self.ui, 'continue_btn_img') and self.ui.continue_btn_img:
+                    self.screen.blit(self.ui.continue_btn_img, self.ui.continue_btn_rect)
         except Exception:
             pass
 

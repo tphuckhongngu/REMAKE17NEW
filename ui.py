@@ -17,6 +17,16 @@ class UI:
         self.about_mode = 0
 
         self.screen = screen
+        self.is_paused = False
+        try:
+            path_cont = os.path.join("anh", "continue.png")
+            self.continue_btn_img = pygame.image.load(path_cont).convert_alpha()
+            # DÒNG QUAN TRỌNG: Thay đổi (150, 50) theo ý bạn
+            self.continue_btn_img = pygame.transform.scale(self.continue_btn_img, (150, 50))
+            self.continue_btn_rect = self.continue_btn_img.get_rect(center=(WIDTH // 2, HEIGHT // 2 + 50))
+        except Exception as e:
+            print("Không thể load ảnh continue.png:", e)
+            self.continue_btn_img = None
         # Prefer a bundled font that includes Vietnamese glyphs (DejaVu Sans),
         # fall back to common system fonts then to default.
         try:
