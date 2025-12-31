@@ -51,6 +51,8 @@ class Player(pygame.sprite.Sprite):
 
         # trạng thái
         self.health = PLAYER_HP
+        # frozen until timestamp (ms) when rooted by web
+        self.frozen_until = 0
 
         # ammo / reload
         self.max_ammo = MAX_AMMO
@@ -77,16 +79,22 @@ class Player(pygame.sprite.Sprite):
     # -------- input & movement --------
     def handle_input(self):
         keys = pygame.key.get_pressed()
+        now = pygame.time.get_ticks()
         self.velocity.x = 0
         self.velocity.y = 0
-        if keys[pygame.K_w] or keys[pygame.K_UP]:
-            self.velocity.y = -PLAYER_SPEED
-        if keys[pygame.K_s] or keys[pygame.K_DOWN]:
-            self.velocity.y = PLAYER_SPEED
-        if keys[pygame.K_a] or keys[pygame.K_LEFT]:
-            self.velocity.x = -PLAYER_SPEED
-        if keys[pygame.K_d] or keys[pygame.K_RIGHT]:
-            self.velocity.x = PLAYER_SPEED
+        # if frozen (rooted), do not allow movement
+        if now < getattr(self, 'frozen_until', 0):
+            # allow reload while frozen, but no movement
+            pass
+        else:
+            if keys[pygame.K_w] or keys[pygame.K_UP]:
+                self.velocity.y = -PLAYER_SPEED
+            if keys[pygame.K_s] or keys[pygame.K_DOWN]:
+                self.velocity.y = PLAYER_SPEED
+            if keys[pygame.K_a] or keys[pygame.K_LEFT]:
+                self.velocity.x = -PLAYER_SPEED
+            if keys[pygame.K_d] or keys[pygame.K_RIGHT]:
+                self.velocity.x = PLAYER_SPEED
 
         # nhấn R để reload nếu cần
         if keys[pygame.K_r] and (not self.reloading) and (self.ammo < self.max_ammo):

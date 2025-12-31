@@ -63,7 +63,7 @@ class UI:
         # recent scores (most recent first)
         self.recent_scores = []
         # max number of recent scores to display
-        self.recent_limit = 10
+        self.recent_limit = 5
         self.all_scores = []
         
         self.has_played_highscore_sound = False
@@ -689,8 +689,15 @@ class UI:
         try:
             # Only draw the score label here; detailed health/ammo are drawn by Player methods
             try:
+                # place score to the left, below the player's ammo bar
+                hud_x = 12
+                hud_y = 12
+                bar_h = 18
+                gap = 12
+                ammo_top = hud_y + bar_h + gap
+                score_y = ammo_top + bar_h + 8
                 score_s = self.small_font.render(f"Score: {int(self.score)}", True, (240, 220, 60))
-                self.screen.blit(score_s, score_s.get_rect(midtop=(WIDTH//2, 12)))
+                self.screen.blit(score_s, score_s.get_rect(topleft=(hud_x, score_y)))
             except Exception:
                 pass
         except Exception:
@@ -738,8 +745,9 @@ class UI:
                 except Exception:
                     scores = []
 
-            self.all_scores = scores
-            self.recent_scores = list(self.all_scores)[:self.recent_limit]
+            # keep only the most recent `recent_limit` scores
+            self.all_scores = list(scores)[:self.recent_limit]
+            self.recent_scores = list(self.all_scores)
             self.high_score = max(self.all_scores) if self.all_scores else 0
         except Exception:
             self.high_score = 0
@@ -773,14 +781,14 @@ class UI:
 
             # insert newest at front
             current.insert(0, int(score))
-            # keep a reasonable history
-            current = current[:50]
+            # keep only the most recent `recent_limit` scores and discard the rest
+            current = current[:self.recent_limit]
             with open('scores.txt', 'w') as f:
                 for s in current:
                     f.write(str(s) + '\n')
 
             self.all_scores = current
-            self.recent_scores = list(self.all_scores)[:self.recent_limit]
+            self.recent_scores = list(self.all_scores)
             self.high_score = max(self.all_scores) if self.all_scores else 0
             # also update legacy highscore file
             try:

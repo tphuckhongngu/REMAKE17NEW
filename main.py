@@ -11,6 +11,7 @@ from ui import UI
 from events import EventHandler
 from sounds import SoundManager
 from enemy import Enemy, Monster2, load_enemy_sprites
+from boss import Boss
 from camera import Camera
 from maps.map_manager import MapManager
 from maps import trainingmap
@@ -23,6 +24,8 @@ from teleport_gate import TeleportGate
 # tinh chỉnh spawn (pixel)
 ENEMY_SPAWN_MIN_DIST = 200   # tối thiểu khoảng cách spawn enemy cách player (pixel)
 ENEMY_SPAWN_TRIES = 500      # số lần thử tìm tile trống trước khi fallback
+BOSS_SPAWN_INTERVAL = 10000  # ms between automatic boss spawns
+MONSTER2_SPAWN_CHANCE = 0.35  # chance to spawn Monster2 instead of Enemy
 
 
 class Game:
@@ -111,6 +114,12 @@ class Game:
         self.npcs = pygame.sprite.Group()
         # teleport gates (created for main map only)
         self.gates = pygame.sprite.Group()
+        # boss attack groups
+        self.boss_bullets = pygame.sprite.Group()
+        self.poison_pools = pygame.sprite.Group()
+        self.lasers = pygame.sprite.Group()
+        self.webs = pygame.sprite.Group()
+
 
         # event handler (nếu bạn có class này)
         self.event_handler = EventHandler(self)
@@ -132,6 +141,13 @@ class Game:
         # boss / score
         self.boss_spawned = False
         self.last_boss_score = 0
+        # time (ms) of last periodic boss spawn
+        try:
+            self.last_boss_time = pygame.time.get_ticks()
+        except Exception:
+            self.last_boss_time = 0
+        # persistent boss health across appearances
+        self.boss_persistent_health = 100
         # heal items
         self.heal_items = pygame.sprite.Group()
         self.heal_spawn_timer = 0
@@ -476,6 +492,10 @@ class Game:
         # update tất cả sprites
         self.all_sprites.update()
         self.bullets.update()
+        self.boss_bullets.update()
+        self.poison_pools.update()
+        self.lasers.update()
+        self.webs.update()
         self.heal_items.update()
         # update NPCs (typing effect)
         for n in self.npcs:
@@ -501,10 +521,48 @@ class Game:
 
            
 
-        # spawn boss theo điểm
-        if getattr(self.ui, "score", 0) - self.last_boss_score >= 100:
+        # periodic spawn every BOSS_SPAWN_INTERVAL (ms)
+        try:
+            now = pygame.time.get_ticks()
+        except Exception:
+            now = 0
+
+        # do not spawn if a boss already exists
+        has_boss = any([e.__class__.__name__ == 'Boss' for e in self.enemies])
+        if not has_boss and now - getattr(self, 'last_boss_time', 0) >= BOSS_SPAWN_INTERVAL:
             self.spawn_boss()
+            self.last_boss_time = now
+
+        # legacy score-based spawn (kept but less aggressive)
+        if getattr(self.ui, "score", 0) - self.last_boss_score >= 100:
+            if not has_boss:
+                self.spawn_boss()
             self.last_boss_score += 150
+
+        # collect pending attacks from bosses and add them to appropriate groups
+        try:
+            for e in list(self.enemies):
+                if getattr(e, 'pending_attacks', None):
+                    while e.pending_attacks:
+                        atk = e.pending_attacks.pop(0)
+                        try:
+                            self.all_sprites.add(atk)
+                        except Exception:
+                            pass
+                        # categorize
+                        cname = atk.__class__.__name__
+                        if cname == 'BossBullet':
+                            self.boss_bullets.add(atk)
+                        elif cname == 'PoisonPool':
+                            # add small defaults used by main collision
+                            atk.damage_interval = getattr(atk, 'damage_interval', 500)
+                            self.poison_pools.add(atk)
+                        elif cname == 'Laser':
+                            self.lasers.add(atk)
+                        elif cname == 'Web':
+                            self.webs.add(atk)
+        except Exception:
+            pass
 
         # --- Tutorial practice detection ---
         if getattr(self, "tutorial_mode", False) and getattr(self, 'npc', None) is not None and not self.tutorial_followup_done:
@@ -659,17 +717,44 @@ class Game:
             else:
                 enemy.hp = getattr(enemy, "hp", 0) - dmg
 
-            if getattr(enemy, "hp", 1) <= 0:
-                if hasattr(enemy, "score_value"):
+            # persist boss health if applicable
+            try:
+                if enemy.__class__.__name__ == 'Boss':
+                    # update persistent health
                     try:
-                        # do not count scores earned during tutorial/training runs
+                        self.boss_persistent_health = max(0, int(getattr(enemy, 'health', 0)))
+                    except Exception:
+                        pass
+            except Exception:
+                pass
+
+            if getattr(enemy, "hp", 1) <= 0:
+                # boss gets special handling: award 1000 and reset persistent health
+                if enemy.__class__.__name__ == 'Boss':
+                    try:
                         if not getattr(self, 'tutorial_mode', False):
-                            self.ui.score += enemy.score_value
+                            self.ui.score += 1000
                             if self.ui.score > self.ui.high_score:
                                 self.ui.high_score = self.ui.score
                                 self.ui.save_high_score()
                     except Exception:
                         pass
+                    # reset persistent health for next full boss
+                    try:
+                        self.boss_persistent_health = getattr(enemy, 'max_health', 100)
+                    except Exception:
+                        self.boss_persistent_health = 100
+                else:
+                    if hasattr(enemy, "score_value"):
+                        try:
+                            # do not count scores earned during tutorial/training runs
+                            if not getattr(self, 'tutorial_mode', False):
+                                self.ui.score += enemy.score_value
+                                if self.ui.score > self.ui.high_score:
+                                    self.ui.high_score = self.ui.score
+                                    self.ui.save_high_score()
+                        except Exception:
+                            pass
                 enemy.kill()
 
         # va chạm quái - player
@@ -686,6 +771,67 @@ class Game:
                 else:
                     self.player.health -= 10
                 enemy.kill()
+
+        # boss bullets hit player
+        try:
+            bb_hits = pygame.sprite.spritecollide(self.player, self.boss_bullets, True)
+            for b in bb_hits:
+                SoundManager.play_hurt_sound()
+                self.player.hit_timer = pygame.time.get_ticks()
+                self.player.health -= 12
+        except Exception:
+            pass
+
+        # poison pools damage over time
+        try:
+            now = pygame.time.get_ticks()
+            pools = pygame.sprite.spritecollide(self.player, self.poison_pools, False)
+            for p in pools:
+                last = getattr(p, 'last_hurt', 0)
+                if now - last >= getattr(p, 'damage_interval', 500):
+                    try:
+                        self.player.health -= 5
+                        p.last_hurt = now
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+
+        # lasers instant damage (only once per laser)
+        try:
+            lasers = pygame.sprite.spritecollide(self.player, self.lasers, False)
+            for l in lasers:
+                if not getattr(l, 'hit_done', False):
+                    try:
+                        self.player.health -= 20
+                        l.hit_done = True
+                        SoundManager.play_hurt_sound()
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+
+        # webs: root player for duration (handled by web sprite on collision)
+        try:
+            webs_hit = pygame.sprite.spritecollide(self.player, self.webs, True)
+            for w in webs_hit:
+                try:
+                    now = pygame.time.get_ticks()
+                    dur = getattr(w, 'root_duration', 3000)
+                    # set player frozen_until timestamp
+                    try:
+                        self.player.frozen_until = now + dur
+                    except Exception:
+                        setattr(self.player, 'frozen_until', now + dur)
+                    # optional sound
+                    try:
+                        SoundManager.play_hurt_sound()
+                    except Exception:
+                        pass
+                except Exception:
+                    pass
+        except Exception:
+            pass
 
         # Nếu đang ở tutorial, kiểm tra điều kiện hoàn thành: player đi tới gần mép phải map
         if getattr(self, "tutorial_mode", False) and self.player is not None:
@@ -857,6 +1003,47 @@ class Game:
         except Exception:
             pass
 
+        # --- Boss health bar (top-center, below score) ---
+        try:
+            boss = None
+            for e in self.enemies:
+                if e.__class__.__name__ == 'Boss':
+                    boss = e
+                    break
+            if boss is not None:
+                try:
+                    # place under score (UI draws score at midtop y=12)
+                    score_h = 0
+                    try:
+                        score_h = self.ui.small_font.get_height()
+                    except Exception:
+                        score_h = 18
+                    bar_w = 320
+                    bar_h = 14
+                    x = WIDTH // 2 - bar_w // 2
+                    y = 12 + score_h + 8
+                    # background
+                    pygame.draw.rect(self.screen, (20, 20, 20), (x-2, y-2, bar_w+4, bar_h+4))
+                    pygame.draw.rect(self.screen, (40, 10, 60), (x, y, bar_w, bar_h))
+                    # fill
+                    try:
+                        frac = max(0.0, min(1.0, float(boss.health) / float(getattr(boss, 'max_health', 100))))
+                    except Exception:
+                        frac = 1.0
+                    fill_w = int(bar_w * frac)
+                    pygame.draw.rect(self.screen, (180, 0, 180), (x, y, fill_w, bar_h))
+                    pygame.draw.rect(self.screen, (200, 200, 200), (x, y, bar_w, bar_h), 2)
+                    # hp text
+                    try:
+                        txt = self.ui.small_font.render(f"Boss {int(boss.health)}/{int(getattr(boss,'max_health',100))}", True, (255, 255, 255))
+                        self.screen.blit(txt, txt.get_rect(center=(WIDTH//2, y + bar_h//2)))
+                    except Exception:
+                        pass
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
         # ammo HUD removed: player.draw_ammo() not called so player enters directly
 
         # pause overlay
@@ -960,9 +1147,60 @@ class Game:
                 avoid_pos=self.player.rect.center if self.player else None,
                 min_dist=ENEMY_SPAWN_MIN_DIST
             )
-        enemy = Enemy(self.player, map_manager=self.map_manager)
+
+        # choose Monster2 sometimes (stronger) and allow it to spawn from gates
+        try:
+            if random.random() < MONSTER2_SPAWN_CHANCE:
+                enemy = Monster2(self.player, map_manager=self.map_manager)
+            else:
+                enemy = Enemy(self.player, map_manager=self.map_manager)
+        except Exception:
+            enemy = Enemy(self.player, map_manager=self.map_manager)
+
+        # place enemy, avoid being placed overlapping walls (Monster2 prone to get stuck)
         enemy.rect.center = spawn_pos
         enemy.pos = pygame.Vector2(spawn_pos)
+
+        # if initial placement collides with a wall, nudge toward map center until free
+        try:
+            test_rect = enemy.rect.copy()
+            blocked = False
+            for wall in getattr(self.map_manager, 'collision_rects', []):
+                if test_rect.colliderect(wall):
+                    blocked = True
+                    break
+            if blocked:
+                # compute map center in pixels
+                layout = getattr(self.map_manager, 'layout', [])
+                tile_size = 64
+                try:
+                    sample_img = next(iter(self.map_manager.tiles.values()))
+                    tile_size = sample_img.get_width()
+                except Exception:
+                    pass
+                rows = len(layout)
+                cols = len(layout[0]) if rows > 0 else 0
+                map_center = pygame.Vector2((cols * tile_size) / 2, (rows * tile_size) / 2)
+                attempts = 0
+                while blocked and attempts < 8:
+                    attempts += 1
+                    dirv = (map_center - pygame.Vector2(enemy.rect.center))
+                    if dirv.length_squared() == 0:
+                        dirv = pygame.Vector2(1, 0)
+                    dirn = dirv.normalize()
+                    # nudge by half a tile toward center
+                    new_center = pygame.Vector2(enemy.rect.center) + dirn * (tile_size // 2)
+                    enemy.rect.center = (int(new_center.x), int(new_center.y))
+                    enemy.pos = pygame.Vector2(enemy.rect.center)
+                    # re-check collisions
+                    test_rect = enemy.rect.copy()
+                    blocked = False
+                    for wall in getattr(self.map_manager, 'collision_rects', []):
+                        if test_rect.colliderect(wall):
+                            blocked = True
+                            break
+        except Exception:
+            pass
 
         self.enemies.add(enemy)
         self.all_sprites.add(enemy)
@@ -973,13 +1211,93 @@ class Game:
         if getattr(self, 'tutorial_mode', False):
             return
 
-        spawn_pos = self.find_free_tile_center(
-            avoid_pos=self.player.rect.center if self.player else None,
-            min_dist=ENEMY_SPAWN_MIN_DIST + 100
-        )
-        boss = Monster2(self.player, map_manager=self.map_manager)
-        boss.rect.center = spawn_pos
-        boss.pos = pygame.Vector2(spawn_pos)
+        # Try to spawn boss within the current camera viewport (so player can see it)
+        spawn_pos = None
+        try:
+            layout = getattr(self.map_manager, 'layout', [])
+            # determine tile size
+            try:
+                sample_img = next(iter(self.map_manager.tiles.values()))
+                tile_size = sample_img.get_width()
+            except Exception:
+                tile_size = 64
+
+            rows = len(layout)
+            cols = len(layout[0]) if rows > 0 else 0
+
+            # viewport in world coords
+            try:
+                vx = int(self.camera.offset.x)
+                vy = int(self.camera.offset.y)
+            except Exception:
+                vx, vy = 0, 0
+            vw, vh = WIDTH, HEIGHT
+
+            tx_min = max(1, vx // tile_size)
+            ty_min = max(1, vy // tile_size)
+            tx_max = min(max(1, cols - 2), (vx + vw) // tile_size)
+            ty_max = min(max(1, rows - 2), (vy + vh) // tile_size)
+
+            tries = 0
+            while tries < ENEMY_SPAWN_TRIES:
+                tries += 1
+                tx = random.randint(tx_min, max(tx_min, tx_max))
+                ty = random.randint(ty_min, max(ty_min, ty_max))
+                x = tx * tile_size + tile_size // 2
+                y = ty * tile_size + tile_size // 2
+                # avoid too close to player
+                if self.player is not None:
+                    dx = x - self.player.rect.centerx
+                    dy = y - self.player.rect.centery
+                    if (dx*dx + dy*dy) < (ENEMY_SPAWN_MIN_DIST + 100)**2:
+                        continue
+                # test collision against map walls
+                w = h = PLAYER_SIZE if 'PLAYER_SIZE' in globals() else tile_size // 2
+                test_rect = pygame.Rect(0, 0, w, h)
+                test_rect.center = (x, y)
+                blocked = False
+                for wall in getattr(self.map_manager, 'collision_rects', []):
+                    if test_rect.colliderect(wall):
+                        blocked = True
+                        break
+                if not blocked:
+                    spawn_pos = (x, y)
+                    break
+        except Exception:
+            spawn_pos = None
+
+        if spawn_pos is None:
+            # fallback to map-aware free tile center
+            spawn_pos = self.find_free_tile_center(
+                avoid_pos=self.player.rect.center if self.player else None,
+                min_dist=ENEMY_SPAWN_MIN_DIST + 100
+            )
+
+        boss = Boss(self.player, map_manager=self.map_manager, start_pos=spawn_pos)
+        try:
+            boss.pos = pygame.Vector2(spawn_pos)
+            boss.rect.center = spawn_pos
+        except Exception:
+            pass
+
+        # restore persistent health (do not reset when boss reappears)
+        try:
+            boss.max_health = getattr(boss, 'max_health', 100)
+            boss.health = getattr(self, 'boss_persistent_health', boss.max_health)
+        except Exception:
+            pass
+
+        # reward value when defeated
+        try:
+            boss.score_value = 1000
+        except Exception:
+            pass
+
+        # mark as boss-type for damage logic elsewhere
+        try:
+            boss.type = 'boss'
+        except Exception:
+            pass
 
         self.enemies.add(boss)
         self.all_sprites.add(boss)
