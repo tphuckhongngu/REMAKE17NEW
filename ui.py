@@ -10,6 +10,12 @@ def load_img(*path):
 
 class UI:
     def __init__(self, screen):
+
+        # === NÚT ABOUT US ĐỘC LẬP ===
+       
+        # Trạng thái: 0 = menu bình thường, 1 = slide 1, 2 = slide 2, ...
+        self.about_mode = 0
+
         self.screen = screen
         # Prefer a bundled font that includes Vietnamese glyphs (DejaVu Sans),
         # fall back to common system fonts then to default.
@@ -81,7 +87,7 @@ class UI:
         # ==========================================
         # 1.5 LOAD PROFILE / TRAINING BUTTONS (menu corner)
         # ==========================================
-        ICON_SIZE = 128
+        ICON_SIZE = 90
         def load_icon(name, fallback_color):
             try:
                 img = load_img('anhgd2', name)
@@ -105,12 +111,38 @@ class UI:
         self.profile_img = load_icon('profile.png', (80, 80, 80))
         self.training_img = load_icon('training.png', (100, 100, 100))
 
+        
         # position: top-right corner, with small margin
         margin = 12
         self.profile_rect = self.profile_img.get_rect(topright=(WIDTH - margin, margin))
         # place training to the left of profile with spacing (bigger icons -> bigger spacing)
         spacing = 16
         self.training_rect = self.training_img.get_rect(topright=(self.profile_rect.left - spacing, margin))
+
+        # === ABOUT US - GIỮ NGUYÊN BIẾN CŨ + THÊM STORY SLIDES ===
+        # Giữ nguyên biến cũ như bạn yêu cầu
+        self.about_us_bg = pygame.transform.scale(load_img('anhgd2', 'about.png'), (WIDTH, HEIGHT))
+
+        # Danh sách slide mới (story mode)
+        self.about_slides = []
+        try:
+            self.about_slides.append(pygame.transform.scale(load_img('anhgd2', 'about.png'), (WIDTH, HEIGHT)))      # Slide 1 (cùng với about_us_bg cũ)
+            self.about_slides.append(pygame.transform.scale(load_img('anhgd2', 'about2.png'), (WIDTH, HEIGHT)))     # Slide 2
+            self.about_slides.append(pygame.transform.scale(load_img('anhgd2', 'about3.png'), (WIDTH, HEIGHT)))     # Slide 3
+            self.about_slides.append(pygame.transform.scale(load_img('anhgd2', 'about4.png'), (WIDTH, HEIGHT)))     # Slide cuối
+            # Thêm about5.png, about6.png... nếu cần
+        except Exception as e:
+            print(f"Lỗi load slide About: {e}")
+            # Fallback: ít nhất có slide đầu
+            if not self.about_slides:
+                self.about_slides.append(self.about_us_bg)  # dùng biến cũ làm fallback
+
+        # Nút About Us nhỏ góc trái dưới
+        self.about_button_img = pygame.transform.scale(load_img('anhgd2', 'aboutshe.png'), (90, 90))
+        self.about_button_rect = self.about_button_img.get_rect(bottomleft=(40, HEIGHT - 40))
+
+        # Trạng thái: 0 = menu bình thường, 1 = slide 1, 2 = slide 2, ...
+        self.about_mode = 0
 
         # ==========================================
         # 2. LOAD ẢNH IN-GAME
@@ -247,12 +279,21 @@ class UI:
     # ================= DRAW FUNCTIONS =================
 
     def draw_menu(self):
+        # === ABOUT US STORY MODE - CHỈ HIỂN THỊ KHI about_mode > 0 ===
+        if self.about_mode > 0:
+            slide_index = self.about_mode - 1
+            if 0 <= slide_index < len(self.about_slides):
+                self.screen.blit(self.about_slides[slide_index], (0, 0))
+            return  # Che hết menu
+
+        # === MENU BÌNH THƯỜNG ===
         self.screen.blit(self.deep_menu_background, (0, 0))
         self.screen.blit(self.bg_image, self.bg_rect)
         self.screen.blit(self.restart_img, self.restart_rect)
         self.screen.blit(self.howto_img, self.howto_rect)
         self.screen.blit(self.quit_img, self.quit_rect)
         self.screen.blit(self.highscore_img, self.highscore_rect)
+        self.screen.blit(self.about_button_img, self.about_button_rect)
         # draw profile and training buttons at top-right with subtle shadow/outline
         try:
             for img, rect in ((self.training_img, self.training_rect), (self.profile_img, self.profile_rect)):
@@ -334,8 +375,6 @@ class UI:
             panel = pygame.Surface((panel_w, panel_h), pygame.SRCALPHA)
             panel.fill((18, 18, 18, 240))
             pygame.draw.rect(panel, (200, 200, 200), (0, 0, panel_w, panel_h), 2)
-
-            # Title removed per request (previously 'Character Codex')
 
             # selected profile large view
             sel = max(0, min(self.profile_selected, len(self.profiles)-1))
