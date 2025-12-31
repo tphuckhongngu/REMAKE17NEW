@@ -53,7 +53,8 @@ class UI:
         # recent scores (most recent first)
         self.recent_scores = []
         self.all_scores = []
-
+        
+        self.has_played_highscore_sound = False
         # ==========================================
         # 1. LOAD ẢNH MENU CHÍNH
         # ==========================================
