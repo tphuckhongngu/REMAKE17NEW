@@ -2,6 +2,7 @@ import pygame
 from sounds import SoundManager
 import sys
 
+
 class EventHandler:
     def __init__(self, game):
         self.game = game
@@ -9,22 +10,23 @@ class EventHandler:
     def handle_events(self):
         for event in pygame.event.get():
 
-            # THOAT GAME
+            # THOÁT GAME
             if event.type == pygame.QUIT:
                 pygame.quit()
                 sys.exit()
 
-            # TIMER: DUNG TIENG NAP DAN
+            # DỪNG TIẾNG NẠP ĐẠN KHI HẾT TIMER
             if event.type == pygame.USEREVENT + 1:
                 SoundManager.stop_reload_sound()
 
-            # CLICK CHUOT TRAI
+            # CLICK CHUỘT TRÁI
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 mx, my = event.pos
                 self.handle_mouse_click(mx, my)
 
-            # NHAN PHIM
+            # NHẤN PHÍM
             if event.type == pygame.KEYDOWN:
+                # ESC: quay về menu từ instructions hoặc pause trong game
                 if event.key == pygame.K_ESCAPE:
                     if self.game.game_state == "INSTRUCTIONS":
                         SoundManager.play_click_sound()
@@ -32,149 +34,160 @@ class EventHandler:
                     elif self.game.game_state == "PLAYING":
                         SoundManager.play_click_sound()
                         self.game.ui.is_paused = not self.game.ui.is_paused
-                # advance dialog with Enter / Return
-                if event.key in (pygame.K_RETURN, pygame.K_KP_ENTER):
-                    try:
-                        if getattr(self.game, 'npc', None) is not None:
-                            self.game.npc.advance()
-                    except Exception:
-                        pass
-                # F11 toggle fullscreen
+
+                # ENTER: tiến thoại NPC
+                if event.key in (pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_SPACE):
+                    if getattr(self.game, 'npc', None) is not None:
+                        self.game.npc.advance()
+
+                # F11: toggle fullscreen
                 if event.key == pygame.K_F11:
-                    try:
-                        self.game.toggle_fullscreen()
-                    except Exception:
-                        pass
+                    self.game.toggle_fullscreen()
 
     def handle_mouse_click(self, mx, my):
         state = self.game.game_state
 
         # =================================================
-        # 1. MENU CHÍNH (3 Nút: Play, Quit, HowTo)
+        # 1. MENU CHÍNH
         # =================================================
         if state == "MENU":
-            buttons = self.game.ui.get_menu_button_rects()
-            if buttons['restart'].collidepoint(mx, my): # Nút Play
+            ui = self.game.ui
+
+            # Nút About nhỏ góc trái dưới → bắt đầu story slide
+            if ui.about_button_rect.collidepoint(mx, my):
                 SoundManager.play_click_sound()
-                # always start main game (not tutorial) when pressing Play
+                ui.about_mode = 1  # slide đầu tiên
+                return
+
+            # Đang xem About story → click bất kỳ đâu để chuyển slide tiếp
+            if ui.about_mode > 0:
+                SoundManager.play_click_sound()
+                ui.about_mode += 1
+                # Nếu hết slide → quay về menu
+                if ui.about_mode > len(ui.about_slides):
+                    ui.about_mode = 0
+                return  # Quan trọng: ngăn các nút menu khác bị kích hoạt
+
+            # Các nút menu chính
+            buttons = ui.get_menu_button_rects()
+
+            if buttons['restart'].collidepoint(mx, my):  # Play
+                SoundManager.play_click_sound()
                 self.game.new_game(tutorial=False)
 
-            # training button (màn huấn luyện riêng)
-            elif buttons.get('training') and buttons['training'].collidepoint(mx, my):
+            elif buttons['training'].collidepoint(mx, my):  # Training
                 SoundManager.play_click_sound()
-                try:
-                    # switch to tutorial map and start the training run
-                    self.game.start_training()
-                except Exception:
-                    # fallback: just start a new main game
-                    self.game.new_game(tutorial=False)
+                self.game.start_training()
 
-            elif buttons['quit'].collidepoint(mx, my):  # Nút Quit
+            elif buttons['quit'].collidepoint(mx, my):  # Quit
                 SoundManager.play_click_sound()
                 pygame.quit()
                 sys.exit()
 
-            elif buttons['howto'].collidepoint(mx, my): # Nút Hướng dẫn
+            elif buttons['howto'].collidepoint(mx, my):  # Instructions
                 SoundManager.play_click_sound()
                 self.game.game_state = "INSTRUCTIONS"
-                self.game.ui.start_instructions()
-            elif buttons['highscore'].collidepoint(mx, my):   # ← THÊM MỚI
-                self.game.ui.update_rank(self.game.ui.high_score)
+                ui.start_instructions()
+
+            elif buttons['highscore'].collidepoint(mx, my):  # Highscore
                 SoundManager.play_click_sound()
+                ui.update_rank(ui.high_score)
                 self.game.game_state = "HIGHSCORE"
-            elif buttons.get('profile') and buttons['profile'].collidepoint(mx, my):
+
+            elif buttons['profile'].collidepoint(mx, my):  # Profile / Codex
                 SoundManager.play_click_sound()
-                # open profile/codex screen and start typing first profile
-                try:
-                    self.game.ui.start_profile(0)
-                except Exception:
-                    pass
+                ui.start_profile(0)
                 self.game.game_state = "PROFILE"
-        
+
+        # =================================================
+        # 2. INSTRUCTIONS (hướng dẫn)
+        # =================================================
         elif state == "INSTRUCTIONS":
             SoundManager.play_click_sound()
-            if self.game.ui.next_slide():               # Click bất kỳ → chuyển slide
-                    self.game.game_state = "MENU"
-        elif state == "HIGHSCORE":
-            SoundManager.play_click_sound()
-            self.game.game_state = "MENU"        
-        elif state == "PROFILE":
-            # use UI-provided rects to handle clicks: back button or slot selection
-            rects = self.game.ui.get_profile_click_rects()
-            back = rects.get('back')
-            slots = rects.get('slots', [])
-            # back button
-            if back and back.collidepoint(mx, my):
-                SoundManager.play_click_sound()
+            if self.game.ui.next_slide():
                 self.game.game_state = "MENU"
-                return
-            # slot selection
-            for idx, r in enumerate(slots):
-                if r.collidepoint(mx, my):
-                    SoundManager.play_click_sound()
-                    try:
-                        # Move selected profile to front (index 0) so it becomes the large view
-                        if idx != 0 and idx < len(self.game.ui.profiles):
-                            prof = self.game.ui.profiles.pop(idx)
-                            self.game.ui.profiles.insert(0, prof)
-                            self.game.ui.start_profile(0)
-                        else:
-                            # already front or invalid index
-                            self.game.ui.start_profile(idx)
-
-                        # if the selected profile has no description, show placeholder message
-                        if not self.game.ui.profiles[0].get('desc'):
-                            self.game.ui.profile_full_text = 'NPC còn lại đang chờ bạn khám phá!'
-                            self.game.ui.profile_display_text = ''
-                            self.game.ui.profile_char_index = 0
-                            self.game.ui.profile_typing_timer = 0
-                    except Exception:
-                        pass
-                    return
-        # =================================================
-        # 2. MÀN HÌNH THUA (GAME_OVER) - (2 Nút: Quit, Restart)
-        # =================================================
-        elif state == "GAME_OVER":
-            # Lấy vị trí nút riêng của màn hình Defeat (đã viết trong UI)
-            buttons = self.game.ui.get_game_over_buttons()
-
-            if buttons['restart'].collidepoint(mx, my): # Nút Mũi tên (Chơi lại)
-                SoundManager.play_click_sound()
-                self.game.new_game(tutorial=False)
-            # Nút Quay về Menu chính
-            elif buttons['home'].collidepoint(mx, my):
-                SoundManager.play_click_sound()
-                self.game.game_state = "MENU" # Chuyển về trạng thái Menu
-                SoundManager.play_menu_music(volume=0.4) # Bật lại nhạc menu nếu cần
-            elif buttons['quit'].collidepoint(mx, my):  # Nút X (Thoát)
-                SoundManager.play_click_sound()
-                pygame.quit()
-                sys.exit()
 
         # =================================================
-        # 3. MÀN HÌNH HƯỚNG DẪN
+        # 3. HIGHSCORE
         # =================================================
-        elif state == "INSTRUCTIONS":
+        elif state == "HIGHSCORE":
             SoundManager.play_click_sound()
             self.game.game_state = "MENU"
 
         # =================================================
-        # 4. ĐANG CHƠI (PLAYING) - (3 Nút góc phải)
+        # 4. PROFILE / CHARACTER CODEX
+        # =================================================
+        elif state == "PROFILE":
+            rects = self.game.ui.get_profile_click_rects()
+            back_rect = rects.get('back')
+            slots = rects.get('slots', [])
+
+            # Nút back (góc phải trên)
+            if back_rect and back_rect.collidepoint(mx, my):
+                SoundManager.play_click_sound()
+                self.game.game_state = "MENU"
+                return
+
+            # Click vào các slot (portrait lớn hoặc thumbnail nhỏ)
+            for idx, rect in enumerate(slots):
+                if rect.collidepoint(mx, my):
+                    SoundManager.play_click_sound()
+                    profiles = self.game.ui.profiles
+
+                    # Nếu click thumbnail (idx 1-4) → đưa lên đầu danh sách
+                    if idx > 0 and idx < len(profiles):
+                        prof = profiles.pop(idx)
+                        profiles.insert(0, prof)
+                        self.game.ui.start_profile(0)
+                    else:
+                        self.game.ui.start_profile(idx)
+
+                    # Nếu profile đầu không có mô tả → hiển thị thông báo placeholder
+                    if not profiles[0].get('desc'):
+                        self.game.ui.profile_full_text = 'NPC còn lại đang chờ bạn khám phá!'
+                        self.game.ui.profile_display_text = ''
+                        self.game.ui.profile_char_index = 0
+                        self.game.ui.profile_typing_timer = 0
+                    return
+
+        # =================================================
+        # 5. GAME OVER
+        # =================================================
+        elif state == "GAME_OVER":
+            buttons = self.game.ui.get_game_over_buttons()
+
+            if buttons['restart'].collidepoint(mx, my):
+                SoundManager.play_click_sound()
+                self.game.new_game(tutorial=False)
+
+            elif buttons['home'].collidepoint(mx, my):
+                SoundManager.play_click_sound()
+                self.game.game_state = "MENU"
+                SoundManager.play_menu_music(volume=0.4)
+
+            elif buttons['quit'].collidepoint(mx, my):
+                SoundManager.play_click_sound()
+                pygame.quit()
+                sys.exit()
+
+        # =================================================
+        # 6. PLAYING (trong game)
         # =================================================
         elif state == "PLAYING":
-            ingame_buttons = self.game.ui.get_ingame_button_rects()
+            buttons = self.game.ui.get_ingame_button_rects()
 
-            if ingame_buttons['backhome'].collidepoint(mx, my):
+            if buttons['backhome'].collidepoint(mx, my):
                 SoundManager.play_click_sound()
                 self.game.game_state = "MENU"
                 SoundManager.fadeout_background_music(500)
                 SoundManager.play_menu_music(volume=0.4)
 
-            elif ingame_buttons['pause'].collidepoint(mx, my):
+            elif buttons['pause'].collidepoint(mx, my):
                 SoundManager.play_click_sound()
                 self.game.ui.is_paused = not self.game.ui.is_paused
 
-            elif ingame_buttons['mute'].collidepoint(mx, my):
+            elif buttons['mute'].collidepoint(mx, my):
                 SoundManager.play_click_sound()
                 self.game.ui.is_muted = not self.game.ui.is_muted
-                SoundManager.set_volume(0.0 if self.game.ui.is_muted else 0.5)
+                volume = 0.0 if self.game.ui.is_muted else 0.5
+                SoundManager.set_volume(volume)
