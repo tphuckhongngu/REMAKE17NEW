@@ -52,6 +52,8 @@ class UI:
         self.high_score = 0
         # recent scores (most recent first)
         self.recent_scores = []
+        # max number of recent scores to display
+        self.recent_limit = 10
         self.all_scores = []
         
         self.has_played_highscore_sound = False
@@ -369,7 +371,18 @@ class UI:
         # Draw recent scores and top score in a panel on the left to avoid overlapping rank image
         try:
             panel_w = 380
-            panel_h = 260
+            # compute dynamic panel height based on fonts and number of recent scores
+            recent_list = self.recent_scores[:self.recent_limit]
+            title_h = self.font.get_height()
+            hs_h = self.small_font.get_height()
+            recent_title_h = self.small_font.get_height()
+            line_h = self.small_font.get_height()
+            spacing = 6
+            padding_top = 8
+            padding_bottom = 12
+            content_h = (padding_top + title_h + 6 + hs_h + 8 + recent_title_h + 6 +
+                         len(recent_list) * (line_h + spacing) + padding_bottom)
+            panel_h = max(260, content_h)
             panel_x = 40
             panel_y = 80
             panel = pygame.Surface((panel_w, panel_h), pygame.SRCALPHA)
@@ -386,7 +399,7 @@ class UI:
             recent_title = self.small_font.render("Recent Scores:", True, (200, 200, 200))
             panel.blit(recent_title, (12, 8 + title_surf.get_height() + 6 + hs_text.get_height() + 8))
             ry = 8 + title_surf.get_height() + 6 + hs_text.get_height() + 8 + recent_title.get_height() + 6
-            for i, sc in enumerate(self.recent_scores[:5]):
+            for i, sc in enumerate(recent_list):
                 try:
                     line = self.small_font.render(f"{i+1}. {sc}", True, (220, 220, 220))
                     panel.blit(line, (12, ry + i * (line.get_height() + 6)))
@@ -716,7 +729,7 @@ class UI:
                     scores = []
 
             self.all_scores = scores
-            self.recent_scores = list(self.all_scores)[:5]
+            self.recent_scores = list(self.all_scores)[:self.recent_limit]
             self.high_score = max(self.all_scores) if self.all_scores else 0
         except Exception:
             self.high_score = 0
@@ -757,7 +770,7 @@ class UI:
                     f.write(str(s) + '\n')
 
             self.all_scores = current
-            self.recent_scores = list(self.all_scores)[:5]
+            self.recent_scores = list(self.all_scores)[:self.recent_limit]
             self.high_score = max(self.all_scores) if self.all_scores else 0
             # also update legacy highscore file
             try:
