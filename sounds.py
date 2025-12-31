@@ -67,6 +67,11 @@ class SoundManager:
             SoundManager.hurt_sound.set_volume(0.9)
         except Exception as e:
             print("Can't load hurt.mp3:", e)
+        try: 
+            SoundManager.highscore_sound = pygame.mixer.Sound(sound_path("soundeffect/highscore_sound.mp3"))
+            SoundManager.highscore_sound.set_volume(0.7)
+        except Exception as e:
+            print("Can't load highscore:", e)
     # --- music helpers (unchanged) ---
     @staticmethod
     def play_begin_sound():
