@@ -83,6 +83,7 @@ class EventHandler:
 
             if buttons['restart'].collidepoint(mx, my):  # Play
                 SoundManager.play_click_sound()
+                print("DEBUG: menu restart clicked - calling new_game()")
                 self.game.new_game(tutorial=False)
 
             elif buttons['training'].collidepoint(mx, my):  # Training

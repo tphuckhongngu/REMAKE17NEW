@@ -5,78 +5,78 @@ import os
 BASE_DIR = os.path.dirname(__file__)
 
 def sound_path(filename):
+    """Trả về đường dẫn đầy đủ đến file âm thanh"""
     return os.path.join(BASE_DIR, filename)
 
 
 class SoundManager:
-    # static attrs (will be set by init_mixer)
+    # Các âm thanh sẽ được load một lần duy nhất
     gun_sound = None
     reload_sound = None
-    shoot_channel = None
-    reload_channel = None
-    initialized = False
     begin_sound = None
     hurt_sound = None
+    highscore_sound = None
+
+    # Âm thanh dành riêng cho skill
+    heal_sound = None
+    powerup_sound = None
+    magic_sound = None      # Skill 3: Bất tử
+    barrage_sound = None    # Skill 4: Bullet Barrage
+
+    # Kênh âm thanh riêng biệt
+    shoot_channel = None
+    reload_channel = None
+    skill_channel = None    # Dùng cho skill lớn (magic, barrage...)
+
+    initialized = False
 
     @staticmethod
     def init_mixer():
-        """Init mixer and load SFX. Call once early (Game.__init__)."""
+        """Khởi tạo mixer và load tất cả âm thanh. Gọi 1 lần trong Game.__init__()"""
         if SoundManager.initialized:
             return
 
+        # Khởi tạo mixer
         try:
             if not pygame.mixer.get_init():
-                pygame.mixer.init(frequency=44100, size=-16, channels=2, buffer=512)
+                pygame.mixer.init(frequency=44100, size=-16, channels=8, buffer=512)
         except Exception as e:
-            print("Mixer init failed:", e)
-            # continue; attempts to load may fail later
+            print("[SOUND] Mixer init failed:", e)
 
-        # create dedicated channels (choose indexes that don't conflict)
-        try:
-            SoundManager.shoot_channel = pygame.mixer.Channel(4)
-            SoundManager.reload_channel = pygame.mixer.Channel(5)
-        except Exception:
-            SoundManager.shoot_channel = None
-            SoundManager.reload_channel = None
+        # Tạo các kênh riêng
+        SoundManager.shoot_channel = pygame.mixer.Channel(4)   # Bắn súng
+        SoundManager.reload_channel = pygame.mixer.Channel(5)  # Nạp đạn
+        SoundManager.skill_channel = pygame.mixer.Channel(6)   # Skill lớn (magic, barrage)
 
-        # load sound files with try/except
-        try:
-            SoundManager.gun_sound = pygame.mixer.Sound(sound_path("gunsound.mp3"))
-            SoundManager.gun_sound.set_volume(0.6)
-        except Exception as e:
-            print("Can't load gunsound.mp3:", e)
-            SoundManager.gun_sound = None
+        # Load các âm thanh chính
+        SoundManager._load_sound("gun_sound", "gunsound.mp3", volume=0.6)
+        SoundManager._load_sound("reload_sound", "gunreload.mp3", volume=0.7)
+        SoundManager._load_sound("begin_sound", "soundeffect/soundbegin.mp3", volume=1.1)
+        SoundManager._load_sound("hurt_sound", "soundeffect/hurt.mp3", volume=0.9)
+        SoundManager._load_sound("highscore_sound", "soundeffect/highscore_sound.mp3", volume=0.7)
 
-        try:
-            SoundManager.reload_sound = pygame.mixer.Sound(sound_path("gunreload.mp3"))
-            SoundManager.reload_sound.set_volume(0.7)
-        except Exception as e:
-            print("Can't load gunreload.mp3:", e)
-            SoundManager.reload_sound = None
+        # Load âm thanh cho SKILL
+        SoundManager._load_sound("heal_sound", "soundeffect/heal_sound.mp3", volume=0.8)           # Skill 1: Hồi máu
+        SoundManager._load_sound("powerup_sound", "soundeffect/skill2.mp3", volume=0.9)     # Skill 2: Boost
+        SoundManager._load_sound("magic_sound", "soundeffect/magic_sound.mp3", volume=1.0)  # Skill 3: Bất tử
+        SoundManager._load_sound("barrage_sound", "soundeffect/skill2.mp3", volume=0.8)     # Skill 4: Barrage
 
         SoundManager.initialized = True
-        try:
-            # Lưu ý: Bạn nói folder là 'soundeffect', hãy kiểm tra lại đường dẫn
-            SoundManager.begin_sound = pygame.mixer.Sound(sound_path("soundeffect/soundbegin.mp3"))
-            SoundManager.begin_sound.set_volume(1.1)
-        except Exception as e:
-            print("Can't load soundbegin:", e)
+        print("[SOUND] SoundManager initialized successfully.")
 
-        try:
-            SoundManager.hurt_sound = pygame.mixer.Sound(sound_path("soundeffect/hurt.mp3"))
-            SoundManager.hurt_sound.set_volume(0.9)
-        except Exception as e:
-            print("Can't load hurt.mp3:", e)
-        try: 
-            SoundManager.highscore_sound = pygame.mixer.Sound(sound_path("soundeffect/highscore_sound.mp3"))
-            SoundManager.highscore_sound.set_volume(0.7)
-        except Exception as e:
-            print("Can't load highscore:", e)
-    # --- music helpers (unchanged) ---
     @staticmethod
-    def play_begin_sound():
-        if SoundManager.begin_sound:
-            SoundManager.begin_sound.play()
+    def _load_sound(attr_name, filename, volume=1.0):
+        """Hàm phụ để load âm thanh an toàn"""
+        try:
+            full_path = sound_path(filename)
+            sound = pygame.mixer.Sound(full_path)
+            sound.set_volume(volume)
+            setattr(SoundManager, attr_name, sound)
+        except Exception as e:
+            print(f"[SOUND] Không load được {filename}: {e}")
+            setattr(SoundManager, attr_name, None)
+
+    # ===================== MUSIC =====================
     @staticmethod
     def play_background_music(volume=0.5):
         try:
@@ -84,7 +84,7 @@ class SoundManager:
             pygame.mixer.music.set_volume(volume)
             pygame.mixer.music.play(-1)
         except Exception as e:
-            print("Loi load background_music:", e)
+            print("[SOUND] Lỗi load background_music.mp3:", e)
 
     @staticmethod
     def play_menu_music(volume=0.4):
@@ -93,7 +93,7 @@ class SoundManager:
             pygame.mixer.music.set_volume(volume)
             pygame.mixer.music.play(-1)
         except Exception as e:
-            print("Loi load menu_music:", e)
+            print("[SOUND] Lỗi load menu_music.mp3:", e)
 
     @staticmethod
     def stop_music():
@@ -107,74 +107,99 @@ class SoundManager:
     def set_volume(volume):
         pygame.mixer.music.set_volume(volume)
 
-    # --- SFX: gun and reload ---
+    # ===================== SFX CƠ BẢN =====================
     @staticmethod
-    def play_gun_sound(maxtime_ms=150):
-        """
-        Play short gun sound. maxtime_ms controls how many milliseconds
-        of the clip actually play (clips longer than that are truncated).
-        """
-        if SoundManager.gun_sound is None:
-            return
-
-        try:
-            # Stop current short gun if playing (optional)
-            if SoundManager.shoot_channel is not None:
-                if SoundManager.shoot_channel.get_busy():
-                    SoundManager.shoot_channel.stop()
-                SoundManager.shoot_channel.play(SoundManager.gun_sound, maxtime=maxtime_ms)
-            else:
-                # fallback
-                SoundManager.gun_sound.play(maxtime=maxtime_ms)
-        except Exception as e:
-            print("Error play_gun_sound:", e)
+    def play_begin_sound():
+        if SoundManager.begin_sound:
+            SoundManager.begin_sound.play()
 
     @staticmethod
-    def play_reload_sound(duration_ms=3000):
-        """
-        Play reload loop and schedule to stop after duration_ms using a pygame timer event.
-        We'll also provide stop_reload_sound() so code can stop earlier.
-        """
-        if SoundManager.reload_sound is None:
-            return
-
-        try:
-            if SoundManager.reload_channel is not None:
-                # loop -1 means continuous; we'll stop with stop_reload_sound or timer event
-                SoundManager.reload_channel.play(SoundManager.reload_sound, loops=-1)
-            else:
-                SoundManager.reload_sound.play(loops=-1)
-            # set a timer event to stop reload after duration_ms
-            pygame.time.set_timer(pygame.USEREVENT + 1, duration_ms)
-        except Exception as e:
-            print("Error play_reload_sound:", e)
+    def play_hurt_sound():
+        if SoundManager.hurt_sound and not pygame.mixer.Channel(7).get_busy():
+            pygame.mixer.Channel(7).play(SoundManager.hurt_sound)
 
     @staticmethod
-    def stop_reload_sound():
-        try:
-            if SoundManager.reload_channel is not None:
-                SoundManager.reload_channel.stop()
-            else:
-                if SoundManager.reload_sound is not None:
-                    SoundManager.reload_sound.stop()
-            # cancel timer to be safe
-            pygame.time.set_timer(pygame.USEREVENT + 1, 0)
-        except Exception as e:
-            print("Error stop_reload_sound:", e)
+    def play_highscore_sound():
+        if SoundManager.highscore_sound:
+            SoundManager.highscore_sound.play()
 
     @staticmethod
     def play_click_sound():
         try:
-            click_sound = pygame.mixer.Sound(sound_path('click.mp3'))
-            click_sound.set_volume(0.6)
-            click_sound.play()
+            click = pygame.mixer.Sound(sound_path("click.mp3"))
+            click.set_volume(0.6)
+            click.play()
         except Exception as e:
-            print("Loi load click sound:", e)
+            print("[SOUND] Lỗi play click:", e)
+
+    # ===================== GUN & RELOAD =====================
     @staticmethod
-    def play_hurt_sound():
-        if SoundManager.hurt_sound:
-            if not pygame.mixer.Channel(6).get_busy(): 
-                pygame.mixer.Channel(6).play(SoundManager.hurt_sound)
+    def play_gun_sound(maxtime_ms=150):
+        if not SoundManager.gun_sound:
+            return
+        try:
+            if SoundManager.shoot_channel and SoundManager.shoot_channel.get_busy():
+                SoundManager.shoot_channel.stop()
+            if SoundManager.shoot_channel:
+                SoundManager.shoot_channel.play(SoundManager.gun_sound, maxtime=maxtime_ms)
+            else:
+                SoundManager.gun_sound.play(maxtime=maxtime_ms)
+        except Exception as e:
+            print("[SOUND] Lỗi play gun:", e)
+
     @staticmethod
-    def play_highscore_sound():
-        SoundManager.highscore_sound.play()
+    def play_reload_sound(duration_ms=3000):
+        if not SoundManager.reload_sound:
+            return
+        try:
+            if SoundManager.reload_channel:
+                SoundManager.reload_channel.play(SoundManager.reload_sound, loops=-1)
+            else:
+                SoundManager.reload_sound.play(loops=-1)
+            pygame.time.set_timer(pygame.USEREVENT + 1, duration_ms)
+        except Exception as e:
+            print("[SOUND] Lỗi play reload:", e)
+
+    @staticmethod
+    def stop_reload_sound():
+        try:
+            if SoundManager.reload_channel:
+                SoundManager.reload_channel.stop()
+            pygame.time.set_timer(pygame.USEREVENT + 1, 0)
+        except Exception as e:
+            print("[SOUND] Lỗi stop reload:", e)
+
+    # ===================== SKILL SOUND =====================
+    @staticmethod
+    def play_heal_sound(volume=0.8):
+        """Skill 1: Hồi máu"""
+        if SoundManager.heal_sound:
+            SoundManager.heal_sound.set_volume(volume)
+            SoundManager.heal_sound.play()
+
+    @staticmethod
+    def play_powerup_sound(volume=0.9):
+        """Skill 2: Boost sát thương boss"""
+        if SoundManager.powerup_sound:
+            SoundManager.powerup_sound.set_volume(volume)
+            SoundManager.powerup_sound.play()
+
+    @staticmethod
+    def play_magic_sound(volume=1.0):
+        """Skill 3: Bất tử 8 giây - âm thanh thần thánh"""
+        if SoundManager.magic_sound and SoundManager.skill_channel:
+            SoundManager.skill_channel.play(SoundManager.magic_sound)
+            SoundManager.magic_sound.set_volume(volume)
+        elif SoundManager.magic_sound:
+            SoundManager.magic_sound.play()
+
+    @staticmethod
+    def play_barrage_sound(volume=0.8):
+        """Skill 4: Bullet Barrage - loạt đạn mạnh mẽ"""
+        if SoundManager.barrage_sound and SoundManager.skill_channel:
+            if SoundManager.skill_channel.get_busy():
+                SoundManager.skill_channel.stop()
+            SoundManager.skill_channel.play(SoundManager.barrage_sound)
+            SoundManager.barrage_sound.set_volume(volume)
+        elif SoundManager.barrage_sound:
+            SoundManager.barrage_sound.play()
