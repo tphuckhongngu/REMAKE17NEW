@@ -4,6 +4,7 @@ import sys
 import random
 import math
 
+from skills import SkillManager
 from settings import *
 from player import Player
 # from bullet import Bullet   # main không tạo bullet trực tiếp nữa
