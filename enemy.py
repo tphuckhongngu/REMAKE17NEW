@@ -176,9 +176,9 @@ class Monster2(Enemy):
     def __init__(self, player, map_manager=None):
         super().__init__(player, map_manager)
 
-        self.hp = 6
+        self.hp = 3
         self.score_value = 100
-        self.type = "boss"
+        self.type = "mini-boss"
         self.speed = 1.0
         self.animation_speed = 0.15
 

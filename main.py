@@ -273,6 +273,18 @@ class Game:
         print(f"DEBUG: tutorial_mode set = {self.tutorial_mode}")
         # reset boss state
         self.boss_spawned = False
+        # reset persistent boss health and any pending victory flags so each run starts fresh
+        try:
+            self.boss_persistent_health = 100
+        except Exception:
+            self.boss_persistent_health = getattr(self, 'boss_persistent_health', 100)
+        try:
+            self.victory_pending = False
+            self.victory_pending_at = 0
+            self.victory_entered_at = 0
+            self.boss_just_killed_at = 0
+        except Exception:
+            pass
 
         # ensure correct map is loaded for chosen mode
         if self.tutorial_mode:
@@ -1329,7 +1341,7 @@ class Game:
         # mark that a boss is active so we can detect victory when it dies
         self.boss_spawned = True
         try:
-            print("DEBUG: Boss spawned, boss_spawned set = True")
+            print(f"DEBUG: Boss spawned, boss_spawned set = True health={getattr(boss,'health',None)} max_health={getattr(boss,'max_health',None)} boss_persistent_health={getattr(self,'boss_persistent_health',None)}")
         except Exception:
             pass
 

@@ -66,7 +66,9 @@ class InvincibilityEffect(pygame.sprite.Sprite):
         pygame.draw.circle(self.image, (255, 255, 0, alpha), (100, 100), 80, 10)
 
 class SkillManager:
-    def __init__(self, player, all_sprites, enemies):
+    def __init__(self, game, player, all_sprites, enemies):
+        # keep reference to game so skills can trigger game-level effects (scores, boss death handling)
+        self.game = game
         self.player = player
         self.all_sprites = all_sprites
         self.enemies = enemies
