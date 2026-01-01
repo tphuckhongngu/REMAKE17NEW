@@ -726,6 +726,9 @@ class Game:
         hits = pygame.sprite.groupcollide(self.enemies, self.bullets, False, True)
         for enemy, bullets_hit in hits.items():
             dmg = len(bullets_hit)
+            if enemy.__class__.__name__ == 'Boss':
+                if self.skill_manager and self.skill_manager.is_boss_damage_boosted():
+                    dmg += 5   # hoặc giá trị bạn muốn (thường là skill tăng damage boss
             if hasattr(enemy, "take_damage"):
                 enemy.take_damage(dmg)
             else:
@@ -842,15 +845,24 @@ class Game:
         
         hits = pygame.sprite.spritecollide(self.player, self.enemies, False)
         for enemy in hits:
-            if not is_invincible: # Chỉ xử lý nếu player không trong thời gian hậu trúng đòn
-                SoundManager.play_hurt_sound()
-                self.player.hit_timer = now
-                
-                if getattr(enemy, "type", "") == "boss":
-                    self.player.health -=10
-                else:
-                    self.player.health -= 5
-                    enemy.kill() # Chỉ xóa quái thường khi player thực sự nhận sát thương
+            for enemy in hits_player:
+            # Luôn nhấp nháy đỏ khi bị chạm
+                self.player.hit_timer = pygame.time.get_ticks()
+                self.trigger_hit_effect()
+
+            # Nếu player đang bất tử (từ skill shield/invincibility)
+            if getattr(self.player, 'invincible', False):
+                enemy.kill()                    # quái thường chết ngay
+                continue                        # không trừ máu, không phát sound
+
+            # Không bất tử → nhận damage bình thường
+            SoundManager.play_hurt_sound()
+            if getattr(enemy, "type", "") == "boss":
+                self.player.health -= 20            # boss gây nhiều damage hơn
+            else:
+                self.player.health -= 10
+            enemy.kill()
+           
         # Nếu đang ở tutorial, kiểm tra điều kiện hoàn thành: player đi tới gần mép phải map
         if getattr(self, "tutorial_mode", False) and self.player is not None:
             try:
@@ -880,6 +892,12 @@ class Game:
                 self.player.health = 100
             # Chèn âm thanh hồi máu nếu có
             # SoundManager.play_heal_sound()
+                # === XỬ LÝ SKILL MANAGER ===
+        if self.skill_manager:
+            self.skill_manager.update()
+            self.skill_manager.handle_input()                    # nhận phím 1,2,3,4
+            self.skill_manager.check_magic_ball_hits()           # skill quả cầu va chạm enemy
+            self.skill_manager.check_barrage_hits()              # skill barrage va chạm enemy
         # game over
         if self.player is not None and self.player.health <= 0:
             # Lưu high score lần cuối nếu phá kỷ lục
@@ -929,6 +947,21 @@ class Game:
 
         # 2) Vẽ Túi máu (Dưới chân Player)
         for item in self.heal_items:
+            if self.skill_manager:
+            # MagicBall và các effect khác
+                for effect in getattr(self.skill_manager, 'effects', []):
+                    try:
+                        draw_rect = self.camera.apply(effect.rect)
+                        self.screen.blit(effect.image, draw_rect)
+                    except:
+                        pass
+            # Barrage bullets (skill 4)
+                for bullet in getattr(self.skill_manager, 'barrage_bullets', []):
+                    try:
+                        draw_rect = self.camera.apply(bullet.rect)
+                        self.screen.blit(bullet.image, draw_rect)
+                    except:
+                        pass
             try:
                 self.screen.blit(item.image, self.camera.apply(item.rect))
             except Exception:
@@ -1101,6 +1134,8 @@ class Game:
             pass
 
         pygame.display.flip()
+        if self.skill_manager:
+            self.skill_manager.draw_icons(self.screen)
 
     def run(self):
         while True:
