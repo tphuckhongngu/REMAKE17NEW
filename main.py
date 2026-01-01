@@ -225,6 +225,7 @@ class Game:
         return (cols * tile_size // 2, rows * tile_size // 2)
 
     def new_game(self, tutorial=False):
+        print(f"DEBUG: new_game(start) tutorial={tutorial}")
         # reset toàn bộ
         self.all_sprites.empty()
         self.bullets.empty()
@@ -249,6 +250,7 @@ class Game:
 
         # set tutorial mode according to caller request
         self.tutorial_mode = bool(tutorial)
+        print(f"DEBUG: tutorial_mode set = {self.tutorial_mode}")
 
         # ensure correct map is loaded for chosen mode
         if self.tutorial_mode:
@@ -328,17 +330,19 @@ class Game:
         except Exception:
             pass
         self.all_sprites.add(self.player)
+        print(f"DEBUG: player added to all_sprites, player exists: {self.player is not None}")
                 # Tạo SkillManager chỉ khi chơi thật (không phải tutorial/training)
         if not tutorial:
-            self.skill_manager = SkillManager(
-                player=self.player,
-                all_sprites=self.all_sprites,
-                enemies=self.enemies,
-                bullets=self.bullets,          # cần cho barrage skill
-                boss_bullets=self.boss_bullets # nếu skill nào cần
-            )
+            try:
+                # SkillManager currently expects (player, all_sprites, enemies)
+                self.skill_manager = SkillManager(self.player, self.all_sprites, self.enemies)
+                print(f"DEBUG: skill_manager created: {self.skill_manager is not None}")
+            except Exception as e:
+                print(f"DEBUG: failed to create skill_manager: {e}")
+                self.skill_manager = None
         else:
             self.skill_manager = None  # tắt hoàn toàn skill trong tutorial
+            print("DEBUG: tutorial mode - skill_manager disabled")
         # ngay lập tức center camera trên player để player xuất hiện giữa màn hình
         try:
             self.camera.update(self.player)
@@ -377,6 +381,7 @@ class Game:
             pass
 
         # đổi state + âm thanh
+        print("DEBUG: new_game - setting game_state = PLAYING")
         self.game_state = "PLAYING"
         SoundManager.stop_music()
         SoundManager.play_background_music(volume=0.5)
@@ -845,7 +850,7 @@ class Game:
         
         hits = pygame.sprite.spritecollide(self.player, self.enemies, False)
         for enemy in hits:
-            for enemy in hits_player:
+            for enemy in hits:
             # Luôn nhấp nháy đỏ khi bị chạm
                 self.player.hit_timer = pygame.time.get_ticks()
                 self.trigger_hit_effect()

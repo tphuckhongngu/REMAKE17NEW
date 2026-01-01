@@ -28,7 +28,7 @@ BULLET_LIFETIME = 1000   # lifetime đạn (milliseconds)
 # -------------------- Enemy --------------------
 ENEMY_SPEED = 1          # tốc độ enemy thường
 ENEMY_SIZE  = 60         # size enemy (pixel) → khớp với sprite
-SPAWN_DELAY = 120        # số frame giữa 2 lần spawn enemy
+SPAWN_DELAY = 90        # số frame giữa 2 lần spawn enemy
 
 # -------------------- Map / Tile --------------------
 TILE_SIZE = 64           # size tile (pixel) → khớp MapManager
