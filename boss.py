@@ -1,53 +1,37 @@
 import os
 import pygame
 import math
-
-try:
-    from PIL import Image, ImageSequence
-    _HAS_PIL = True
-except Exception:
-    _HAS_PIL = False
-
-
 class Boss(pygame.sprite.Sprite):
-    """A simple boss enemy that animates from a GIF (or a single image fallback).
-
-    Constructor:
-      Boss(player, map_manager, gif_path='anh/boss.gif', pos=None)
-
-    If Pillow is available, frames are extracted and animated with per-frame delays.
-    Otherwise the sprite will use a single surface loaded by pygame.image.load.
-    """
-
-    def __init__(self, player, map_manager, gif_path=None, start_pos=(0, 0)):
+    def __init__(self, player, map_manager, start_pos=(0, 0)):
         super().__init__()
         self.player = player
         self.map_manager = map_manager
 
         self.frames = [] 
-        self.delays = []  # milliseconds per frame
+        self.delays = []  # Tốc độ chuyển frame (ms)
 
-        # prefer user-provided gif, then project folder 'bossgif', then legacy 'anh'
-        path = gif_path or os.path.join('bossgif', 'boss.gif')
-        if not os.path.exists(path):
-            path = os.path.join('anh', 'boss.gif')
-        if _HAS_PIL:
+        # --- LOGIC NẠP ẢNH TỪ THƯ MỤC MONSTER/BOSS ---
+        frame_count = 10
+        base_path = os.path.join('monster', 'boss')
+        
+        for i in range(1, frame_count + 1):
+            file_name = f"frame_{i}.png"
+            path = os.path.join(base_path, file_name)
+            
             try:
-                im = Image.open(path)
-                for frame in ImageSequence.Iterator(im):
-                    rgba = frame.convert('RGBA')
-                    data = rgba.tobytes()
-                    surf = pygame.image.fromstring(data, rgba.size, 'RGBA')
-                    self.frames.append(surf)
-                    # GIF frame durations are in hundredths of a second sometimes missing
-                    self.delays.append(frame.info.get('duration', 100))
-            except Exception:
-                self._load_fallback(path)
-        else:
-            self._load_fallback(path)
+                if os.path.exists(path):
+                    img = pygame.image.load(path).convert_alpha()
+                    # Bạn có thể thêm dòng scale ảnh ở đây nếu ảnh quá to/nhỏ
+                    # img = pygame.transform.scale(img, (128, 128)) 
+                    self.frames.append(img)
+                    self.delays.append(100)  # Mặc định 100ms mỗi frame
+                else:
+                    print(f"Cảnh báo: Không tìm thấy {path}")
+            except Exception as e:
+                print(f"Lỗi khi nạp {path}: {e}")
 
+        # Nếu không nạp được ảnh nào, dùng hình tròn tạm thời làm fallback
         if not self.frames:
-            # create a visible fallback
             surf = pygame.Surface((96, 96), pygame.SRCALPHA)
             pygame.draw.circle(surf, (180, 30, 30), (48, 48), 44)
             self.frames = [surf]
@@ -57,51 +41,32 @@ class Boss(pygame.sprite.Sprite):
         self.image = self.frames[self.frame_index]
         self.rect = self.image.get_rect()
 
-        # position (use start_pos pixel coords)
+        # Tọa độ
         try:
             self.pos = pygame.Vector2(start_pos)
         except Exception:
-            self.pos = pygame.Vector2(self.rect.center)
+            self.pos = pygame.Vector2(0, 0)
         self.rect.center = (int(self.pos.x), int(self.pos.y))
 
-        # animation timer
         self._last_update = pygame.time.get_ticks()
 
-        # boss stats
+        # Stats và Logic giữ nguyên như cũ
         self.max_health = 100
         self.health = 100
-
-        # boss is stationary (per user request)
         self.speed = 0.0
-
-        # lifecycle timing: visible_duration, blink_duration (ms)
         self.visible_duration = 5000
         self.blink_duration = 1000
         self.spawn_time = pygame.time.get_ticks()
         self.blinking = False
-
-        # collision box (approx)
         self.hit_rect = self.rect.copy()
 
-        # attack timers
         self.last_shot = 0
-        self.shot_delay = 800  # ms between purple shots
+        self.shot_delay = 800
         self.last_poison = 0
-        self.poison_delay = 2000  # ms between poison spawns
+        self.poison_delay = 2000
         self.last_laser = 0
-        self.laser_delay = 3000  # ms between laser attacks
-
-        # queue for sprites the boss wants spawned this frame
+        self.laser_delay = 3000
         self.pending_attacks = []
-
-    def _load_fallback(self, path):
-        try:
-            img = pygame.image.load(path).convert_alpha()
-            self.frames = [img]
-            self.delays = [100]
-        except Exception:
-            self.frames = []
-            self.delays = []
 
     def update(self, *args):
         now = pygame.time.get_ticks()

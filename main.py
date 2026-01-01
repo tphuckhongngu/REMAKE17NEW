@@ -1206,99 +1206,84 @@ class Game:
         self.all_sprites.add(enemy)
 
     def spawn_boss(self):
-        """Spawn boss khi score đủ, tránh player"""
-        # Do not spawn boss during tutorial/training
+        """Spawn boss khi score đủ, ưu tiên trong tầm nhìn và tránh kẹt tường"""
         if getattr(self, 'tutorial_mode', False):
             return
 
-        # Try to spawn boss within the current camera viewport (so player can see it)
-        spawn_pos = None
+        # 1. Xác định thông số bản đồ và tile
+        layout = self.map_manager.layout
+        if not layout: return
+        
+        # Lấy tile_size an toàn
         try:
-            layout = getattr(self.map_manager, 'layout', [])
-            # determine tile size
-            try:
-                sample_img = next(iter(self.map_manager.tiles.values()))
-                tile_size = sample_img.get_width()
-            except Exception:
-                tile_size = 64
+            sample_img = next(iter(self.map_manager.tiles.values()))
+            tile_size = sample_img.get_width()
+        except StopIteration:
+            tile_size = 64
 
-            rows = len(layout)
-            cols = len(layout[0]) if rows > 0 else 0
+        rows = len(layout)
+        cols = len(layout[0])
 
-            # viewport in world coords
-            try:
-                vx = int(self.camera.offset.x)
-                vy = int(self.camera.offset.y)
-            except Exception:
-                vx, vy = 0, 0
-            vw, vh = WIDTH, HEIGHT
+        # 2. Xác định vùng nhìn thấy (Viewport) để ưu tiên spawn
+        # Lưu ý: Tùy vào class Camera, vx/vy có thể là self.camera.rect.x hoặc offset
+        try:
+            vx = -self.camera.offset.x  # World X tại góc trái màn hình
+            vy = -self.camera.offset.y  # World Y tại góc trên màn hình
+        except:
+            vx, vy = 0, 0
 
-            tx_min = max(1, vx // tile_size)
-            ty_min = max(1, vy // tile_size)
-            tx_max = min(max(1, cols - 2), (vx + vw) // tile_size)
-            ty_max = min(max(1, rows - 2), (vy + vh) // tile_size)
+        # Giới hạn vùng tìm kiếm trong tile (tránh sát mép map quá 1 tile)
+        tx_min = max(1, int(vx // tile_size))
+        ty_min = max(1, int(vy // tile_size))
+        tx_max = min(cols - 2, int((vx + WIDTH) // tile_size))
+        ty_max = min(rows - 2, int((vy + HEIGHT) // tile_size))
 
-            tries = 0
-            while tries < ENEMY_SPAWN_TRIES:
-                tries += 1
-                tx = random.randint(tx_min, max(tx_min, tx_max))
-                ty = random.randint(ty_min, max(ty_min, ty_max))
-                x = tx * tile_size + tile_size // 2
-                y = ty * tile_size + tile_size // 2
-                # avoid too close to player
-                if self.player is not None:
-                    dx = x - self.player.rect.centerx
-                    dy = y - self.player.rect.centery
-                    if (dx*dx + dy*dy) < (ENEMY_SPAWN_MIN_DIST + 100)**2:
-                        continue
-                # test collision against map walls
-                w = h = PLAYER_SIZE if 'PLAYER_SIZE' in globals() else tile_size // 2
-                test_rect = pygame.Rect(0, 0, w, h)
-                test_rect.center = (x, y)
-                blocked = False
-                for wall in getattr(self.map_manager, 'collision_rects', []):
-                    if test_rect.colliderect(wall):
-                        blocked = True
-                        break
-                if not blocked:
-                    spawn_pos = (x, y)
-                    break
-        except Exception:
-            spawn_pos = None
+        # Sửa lỗi tx_min > tx_max nếu camera ở sát rìa
+        if tx_min >= tx_max: tx_min, tx_max = 1, cols - 2
+        if ty_min >= ty_max: ty_min, ty_max = 1, rows - 2
 
+        spawn_pos = None
+        # 3. Vòng lặp tìm vị trí hợp lý
+        tries = 0
+        while tries < 20: # ENEMY_SPAWN_TRIES
+            tries += 1
+            tx = random.randint(tx_min, tx_max)
+            ty = random.randint(ty_min, ty_max)
+            x = tx * tile_size + tile_size // 2
+            y = ty * tile_size + tile_size // 2
+
+            # Kiểm tra khoảng cách với Player (Boss không được đè lên đầu Player)
+            if self.player:
+                dist_sq = (x - self.player.rect.centerx)**2 + (y - self.player.rect.centery)**2
+                if dist_sq < 300**2: # Không spawn trong bán kính 300px
+                    continue
+
+            # Kiểm tra va chạm tường cho Boss (giả sử Boss to khoảng 1.5 tile)
+            boss_test_size = int(tile_size * 1.2) 
+            test_rect = pygame.Rect(0, 0, boss_test_size, boss_test_size)
+            test_rect.center = (x, y)
+            
+            blocked = any(test_rect.colliderect(wall) for wall in self.map_manager.collision_rects)
+            
+            if not blocked:
+                spawn_pos = (x, y)
+                break
+
+        # 4. Fallback nếu không tìm được chỗ trong Viewport
         if spawn_pos is None:
-            # fallback to map-aware free tile center
             spawn_pos = self.find_free_tile_center(
                 avoid_pos=self.player.rect.center if self.player else None,
-                min_dist=ENEMY_SPAWN_MIN_DIST + 100
+                min_dist=400
             )
 
+        # 5. Khởi tạo Boss
         boss = Boss(self.player, map_manager=self.map_manager, start_pos=spawn_pos)
-        try:
-            boss.pos = pygame.Vector2(spawn_pos)
-            boss.rect.center = spawn_pos
-        except Exception:
-            pass
-
-        # restore persistent health (do not reset when boss reappears)
-        try:
-            boss.max_health = getattr(boss, 'max_health', 100)
-            boss.health = getattr(self, 'boss_persistent_health', boss.max_health)
-        except Exception:
-            pass
-
-        # reward value when defeated
-        try:
-            boss.score_value = 1000
-        except Exception:
-            pass
-
-        # mark as boss-type for damage logic elsewhere
-        try:
-            boss.type = 'boss'
-        except Exception:
-            pass
-
+        boss.type = 'boss'
+        
+        # Khôi phục máu cũ nếu có (Persistent Health)
+        boss.max_health = getattr(boss, 'max_health', 150) # Tăng máu boss cho xứng tầm
+        boss.health = getattr(self, 'boss_persistent_health', boss.max_health)
+        
         self.enemies.add(boss)
         self.all_sprites.add(boss)
 
