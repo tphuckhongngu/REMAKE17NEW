@@ -185,6 +185,33 @@ class EventHandler:
                 pygame.quit()
                 sys.exit()
 
+        # Victory screen uses the same buttons layout as Game Over
+        elif state == "VICTORY":
+            # ignore clicks for a short time after entering victory to prevent accidental immediate restart
+            try:
+                now = pygame.time.get_ticks()
+                entered = getattr(self.game, 'victory_entered_at', 0)
+                if now - entered < 500:  # ignore clicks in the first 500 ms
+                    return
+            except Exception:
+                pass
+
+            buttons = self.game.ui.get_game_over_buttons()
+
+            if buttons['restart'].collidepoint(mx, my):
+                SoundManager.play_click_sound()
+                self.game.new_game(tutorial=False)
+
+            elif buttons['home'].collidepoint(mx, my):
+                SoundManager.play_click_sound()
+                self.game.game_state = "MENU"
+                SoundManager.play_menu_music(volume=0.4)
+
+            elif buttons['quit'].collidepoint(mx, my):
+                SoundManager.play_click_sound()
+                pygame.quit()
+                sys.exit()
+
         # =================================================
         # 6. PLAYING (trong game)
         # =================================================

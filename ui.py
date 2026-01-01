@@ -206,6 +206,16 @@ class UI:
             self.defeat_bg = pygame.Surface((WIDTH, HEIGHT))
             self.defeat_bg.fill((50, 0, 0))
 
+        # ==========================================
+        # 3.5 LOAD VICTORY IMAGE
+        # ==========================================
+        try:
+            img_victory = load_img('anh', 'victory.png')
+            self.victory_bg = pygame.transform.scale(img_victory, (WIDTH, HEIGHT))
+        except Exception as e:
+            print(f"Lỗi tải ảnh victory.png: {e}")
+            self.victory_bg = None
+
         # Ensure game-over button surfaces and rects exist even if image loading failed
         try:
             if not hasattr(self, 'btn_quit_over') or self.btn_quit_over is None:
@@ -679,6 +689,49 @@ class UI:
             # helper hint intentionally removed per user request
         except Exception:
             # last-resort fallback: leave screen blank (avoid printing GAME OVER)
+            try:
+                self.screen.fill((0, 0, 0))
+            except Exception:
+                pass
+
+    def draw_victory_screen(self):
+        """Draw a simple victory screen using anh/victory.png if available."""
+        try:
+            if self.victory_bg:
+                self.screen.blit(self.victory_bg, (0, 0))
+            else:
+                bg = pygame.Surface((WIDTH, HEIGHT))
+                bg.fill((20, 120, 20))
+                self.screen.blit(bg, (0, 0))
+            # overlay text
+            try:
+                txt = self.font.render("Victory!", True, (255, 255, 255))
+                self.screen.blit(txt, txt.get_rect(center=(WIDTH // 2, HEIGHT // 2 - 40)))
+            except Exception:
+                pass
+            try:
+                score_s = self.small_font.render(f"Score: {int(self.score)}", True, (240, 220, 60))
+                self.screen.blit(score_s, score_s.get_rect(center=(WIDTH // 2, HEIGHT // 2 + 20)))
+            except Exception:
+                pass
+
+            # draw the same buttons as game over so player can restart or go home
+            try:
+                if getattr(self, 'btn_quit_over', None) and getattr(self, 'rect_quit_over', None):
+                    self.screen.blit(self.btn_quit_over, self.rect_quit_over)
+            except Exception:
+                pass
+            try:
+                if getattr(self, 'btn_restart_over', None) and getattr(self, 'rect_restart_over', None):
+                    self.screen.blit(self.btn_restart_over, self.rect_restart_over)
+            except Exception:
+                pass
+            try:
+                if getattr(self, 'btn_home_over', None) and getattr(self, 'rect_home_over', None):
+                    self.screen.blit(self.btn_home_over, self.rect_home_over)
+            except Exception:
+                pass
+        except Exception:
             try:
                 self.screen.fill((0, 0, 0))
             except Exception:

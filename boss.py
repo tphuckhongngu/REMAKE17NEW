@@ -142,6 +142,10 @@ class Boss(pygame.sprite.Sprite):
     def take_damage(self, amount):
         self.health -= amount * 2
         if self.health <= 0:
+            try:
+                print(f"DEBUG: Boss.take_damage - boss health <=0 (health={self.health}), killing boss")
+            except Exception:
+                pass
             self.kill()
 
     def get_center(self):

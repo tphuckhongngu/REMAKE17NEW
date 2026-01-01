@@ -13,6 +13,7 @@ from events import EventHandler
 from sounds import SoundManager
 from enemy import Enemy, Monster2, load_enemy_sprites
 from boss import Boss ,BossBullet, PoisonPool, Laser, Web
+from game_logic import handle_bullet_enemy_collisions, maybe_spawn_boss, post_update_boss_check
 from camera import Camera
 from maps.map_manager import MapManager
 from maps import trainingmap
@@ -147,6 +148,13 @@ class Game:
             self.last_boss_time = pygame.time.get_ticks()
         except Exception:
             self.last_boss_time = 0
+        # config for boss spawn interval (can be overridden for tests)
+        self.boss_spawn_interval = BOSS_SPAWN_INTERVAL
+        # victory pending state: schedule a short delay between boss death removal and showing VICTORY
+        self.victory_pending = False
+        self.victory_pending_at = 0
+        # increase delay to allow death animations/visuals to finish
+        self.victory_delay_ms = 800
         # persistent boss health across appearances
         self.boss_persistent_health = 100
         # heal items
@@ -225,6 +233,18 @@ class Game:
         return (cols * tile_size // 2, rows * tile_size // 2)
 
     def new_game(self, tutorial=False):
+        # prevent immediate restart if we just entered victory (avoid accidental queued clicks)
+        try:
+            now = pygame.time.get_ticks()
+            entered = getattr(self, 'victory_entered_at', 0)
+            if entered and now - entered < 500:
+                try:
+                    print("DEBUG: new_game() ignored due to recent victory (grace period)")
+                except Exception:
+                    pass
+                return
+        except Exception:
+            pass
         print(f"DEBUG: new_game(start) tutorial={tutorial}")
         # reset toàn bộ
         self.all_sprites.empty()
@@ -251,6 +271,8 @@ class Game:
         # set tutorial mode according to caller request
         self.tutorial_mode = bool(tutorial)
         print(f"DEBUG: tutorial_mode set = {self.tutorial_mode}")
+        # reset boss state
+        self.boss_spawned = False
 
         # ensure correct map is loaded for chosen mode
         if self.tutorial_mode:
@@ -545,25 +567,13 @@ class Game:
 
            
 
-        # periodic spawn every BOSS_SPAWN_INTERVAL (ms)
+        # Boss spawn logic extracted to game_logic
         try:
-            now = pygame.time.get_ticks()
+            maybe_spawn_boss(self)
         except Exception:
-            now = 0
+            pass
 
-        # do not spawn if a boss already exists
-        has_boss = any([e.__class__.__name__ == 'Boss' for e in self.enemies])
-        if not has_boss and now - getattr(self, 'last_boss_time', 0) >= BOSS_SPAWN_INTERVAL:
-            self.spawn_boss()
-            self.last_boss_time = now
-
-        # legacy score-based spawn (kept but less aggressive)
-        if getattr(self.ui, "score", 0) - self.last_boss_score >= 100:
-            if not has_boss:
-                self.spawn_boss()
-            self.last_boss_score += 150
-
-        # Tìm đoạn này trong hàm update() của bạn và thay bằng:
+        # Thu thập đòn đánh từ Boss
 
         # Thu thập đòn đánh từ Boss
         for e in list(self.enemies):
@@ -727,58 +737,11 @@ class Game:
                 except Exception:
                     pass
 
-        # va chạm đạn - quái
-        hits = pygame.sprite.groupcollide(self.enemies, self.bullets, False, True)
-        for enemy, bullets_hit in hits.items():
-            dmg = len(bullets_hit)
-            if enemy.__class__.__name__ == 'Boss':
-                if self.skill_manager and self.skill_manager.is_boss_damage_boosted():
-                    dmg += 5   # hoặc giá trị bạn muốn (thường là skill tăng damage boss
-            if hasattr(enemy, "take_damage"):
-                enemy.take_damage(dmg)
-            else:
-                enemy.hp = getattr(enemy, "hp", 0) - dmg
-
-            # persist boss health if applicable
-            try:
-                if enemy.__class__.__name__ == 'Boss':
-                    # update persistent health
-                    try:
-                        self.boss_persistent_health = max(0, int(getattr(enemy, 'health', 0)))
-                    except Exception:
-                        pass
-            except Exception:
-                pass
-
-            if getattr(enemy, "hp", 1) <= 0:
-                # boss gets special handling: award 1000 and reset persistent health
-                if enemy.__class__.__name__ == 'Boss':
-                    try:
-                        if not getattr(self, 'tutorial_mode', False):
-                            self.ui.score += 1000
-                            if self.ui.score > self.ui.high_score:
-                                self.ui.high_score = self.ui.score
-                                self.ui.save_high_score()
-                        self.last_boss_time = pygame.time.get_ticks()        
-                    except Exception:
-                        pass
-                    # reset persistent health for next full boss
-                    try:
-                        self.boss_persistent_health = getattr(enemy, 'max_health', 100)
-                    except Exception:
-                        self.boss_persistent_health = 100
-                else:
-                    if hasattr(enemy, "score_value"):
-                        try:
-                            # do not count scores earned during tutorial/training runs
-                            if not getattr(self, 'tutorial_mode', False):
-                                self.ui.score += enemy.score_value
-                                if self.ui.score > self.ui.high_score:
-                                    self.ui.high_score = self.ui.score
-                                    self.ui.save_high_score()
-                        except Exception:
-                            pass
-                enemy.kill()
+        # bullet vs enemy collisions handled in game_logic
+        try:
+            handle_bullet_enemy_collisions(self)
+        except Exception:
+            pass
 
         # Thêm vào cuối hàm update() trong main.py
         if self.player is not None:
@@ -846,6 +809,12 @@ class Game:
                     pass
         except Exception:
             pass
+
+        # Fallback boss check handled in game_logic
+        try:
+            post_update_boss_check(self)
+        except Exception:
+            pass
         # Trong Game.update()
         
         hits = pygame.sprite.spritecollide(self.player, self.enemies, False)
@@ -903,7 +872,34 @@ class Game:
             self.skill_manager.handle_input()                    # nhận phím 1,2,3,4
             self.skill_manager.check_magic_ball_hits()           # skill quả cầu va chạm enemy
             self.skill_manager.check_barrage_hits()              # skill barrage va chạm enemy
-        # game over
+        # check boss victory condition (if a boss was spawned and none remain)
+        try:
+            if getattr(self, 'boss_spawned', False):
+                boss_exists = any(e.__class__.__name__ == 'Boss' or getattr(e, 'type', '') == 'boss' for e in self.enemies)
+                if not boss_exists:
+                    # boss defeated -> victory
+                    try:
+                        print("DEBUG: No Boss instances remain - triggering VICTORY state")
+                    except Exception:
+                        pass
+                    self.boss_spawned = False
+                    self.game_state = "VICTORY"
+                    try:
+                        # record time of entering victory to ignore immediate accidental clicks
+                        self.victory_entered_at = pygame.time.get_ticks()
+                    except Exception:
+                        self.victory_entered_at = 0
+                    # Clear any pending mouse clicks to avoid queued input immediately restarting the game
+                    try:
+                        pygame.event.clear(pygame.MOUSEBUTTONDOWN)
+                        pygame.event.clear(pygame.MOUSEBUTTONUP)
+                    except Exception:
+                        pass
+                    SoundManager.stop_music()
+        except Exception:
+            pass
+
+        # game over (player death)
         if self.player is not None and self.player.health <= 0:
             # Lưu high score lần cuối nếu phá kỷ lục
             if self.ui.score > self.ui.high_score:
@@ -926,6 +922,10 @@ class Game:
             return
         if self.game_state == "GAME_OVER":
             self.ui.draw_game_over()
+            pygame.display.flip()
+            return
+        if self.game_state == "VICTORY":
+            self.ui.draw_victory_screen()
             pygame.display.flip()
             return
         if self.game_state == "INSTRUCTIONS":
@@ -1347,6 +1347,12 @@ class Game:
         
         self.enemies.add(boss)
         self.all_sprites.add(boss)
+        # mark that a boss is active so we can detect victory when it dies
+        self.boss_spawned = True
+        try:
+            print("DEBUG: Boss spawned, boss_spawned set = True")
+        except Exception:
+            pass
 
 if __name__ == "__main__":
     g = Game()

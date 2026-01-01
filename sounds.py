@@ -49,8 +49,10 @@ class SoundManager:
         SoundManager.skill_channel = pygame.mixer.Channel(6)   # Skill lớn (magic, barrage)
 
         # Load các âm thanh chính
-        SoundManager._load_sound("gun_sound", "gunsound.mp3", volume=0.6)
-        SoundManager._load_sound("reload_sound", "gunreload.mp3", volume=0.7)
+        # gun sound moved into soundeffect/ folder
+        SoundManager._load_sound("gun_sound", "soundeffect/gunsound.mp3", volume=0.6)
+        # reload sound moved into soundeffect/ folder
+        SoundManager._load_sound("reload_sound", "soundeffect/gunreload.mp3", volume=0.7)
         SoundManager._load_sound("begin_sound", "soundeffect/soundbegin.mp3", volume=1.1)
         SoundManager._load_sound("hurt_sound", "soundeffect/hurt.mp3", volume=0.9)
         SoundManager._load_sound("highscore_sound", "soundeffect/highscore_sound.mp3", volume=0.7)
@@ -80,20 +82,22 @@ class SoundManager:
     @staticmethod
     def play_background_music(volume=0.5):
         try:
-            pygame.mixer.music.load(sound_path("background_music.mp3"))
+            # background music moved into soundeffect/ folder
+            pygame.mixer.music.load(sound_path("soundeffect/background_music.mp3"))
             pygame.mixer.music.set_volume(volume)
             pygame.mixer.music.play(-1)
         except Exception as e:
-            print("[SOUND] Lỗi load background_music.mp3:", e)
+            print("[SOUND] Lỗi load soundeffect/background_music.mp3:", e)
 
     @staticmethod
     def play_menu_music(volume=0.4):
         try:
-            pygame.mixer.music.load(sound_path("menu_music.mp3"))
+            # menu music moved into soundeffect/ folder
+            pygame.mixer.music.load(sound_path("soundeffect/menu_music.mp3"))
             pygame.mixer.music.set_volume(volume)
             pygame.mixer.music.play(-1)
         except Exception as e:
-            print("[SOUND] Lỗi load menu_music.mp3:", e)
+            print("[SOUND] Lỗi load soundeffect/menu_music.mp3:", e)
 
     @staticmethod
     def stop_music():
@@ -126,11 +130,12 @@ class SoundManager:
     @staticmethod
     def play_click_sound():
         try:
-            click = pygame.mixer.Sound(sound_path("click.mp3"))
+            # click sound moved into soundeffect/ folder
+            click = pygame.mixer.Sound(sound_path("soundeffect/click.mp3"))
             click.set_volume(0.6)
             click.play()
         except Exception as e:
-            print("[SOUND] Lỗi play click:", e)
+            print("[SOUND] Lỗi play soundeffect/click.mp3:", e)
 
     # ===================== GUN & RELOAD =====================
     @staticmethod
