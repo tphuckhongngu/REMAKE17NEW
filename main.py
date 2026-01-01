@@ -152,6 +152,8 @@ class Game:
         # heal items
         self.heal_items = pygame.sprite.Group()
         self.heal_spawn_timer = 0
+        #sẽ tạo skill new game khi chơi thật
+        self.skill_manager = None   # sẽ tạo trong new_game chỉ khi chơi thật
         # play begin sound only once
         self.has_played_begin_sound = False
         # damage flash
@@ -326,6 +328,17 @@ class Game:
         except Exception:
             pass
         self.all_sprites.add(self.player)
+                # Tạo SkillManager chỉ khi chơi thật (không phải tutorial/training)
+        if not tutorial:
+            self.skill_manager = SkillManager(
+                player=self.player,
+                all_sprites=self.all_sprites,
+                enemies=self.enemies,
+                bullets=self.bullets,          # cần cho barrage skill
+                boss_bullets=self.boss_bullets # nếu skill nào cần
+            )
+        else:
+            self.skill_manager = None  # tắt hoàn toàn skill trong tutorial
         # ngay lập tức center camera trên player để player xuất hiện giữa màn hình
         try:
             self.camera.update(self.player)
