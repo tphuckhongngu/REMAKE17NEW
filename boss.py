@@ -61,11 +61,11 @@ class Boss(pygame.sprite.Sprite):
         self.hit_rect = self.rect.copy()
 
         self.last_shot = 0
-        self.shot_delay = 800
+        self.shot_delay = 1500
         self.last_poison = 0
-        self.poison_delay = 2000
+        self.poison_delay = 5000
         self.last_laser = 0
-        self.laser_delay = 3000
+        self.laser_delay = 10000
         self.pending_attacks = []
 
     def update(self, *args):
@@ -140,7 +140,7 @@ class Boss(pygame.sprite.Sprite):
         # Boss is stationary: do not attempt to move (ignores map collision)
 
     def take_damage(self, amount):
-        self.health -= amount
+        self.health -= amount * 2
         if self.health <= 0:
             self.kill()
 

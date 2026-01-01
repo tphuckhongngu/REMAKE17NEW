@@ -24,8 +24,8 @@ from teleport_gate import TeleportGate
 # tinh chỉnh spawn (pixel)
 ENEMY_SPAWN_MIN_DIST = 200   # tối thiểu khoảng cách spawn enemy cách player (pixel)
 ENEMY_SPAWN_TRIES = 500      # số lần thử tìm tile trống trước khi fallback
-BOSS_SPAWN_INTERVAL = 25000  # ms between automatic boss spawns
-MONSTER2_SPAWN_CHANCE = 0.35  # chance to spawn Monster2 instead of Enemy
+BOSS_SPAWN_INTERVAL = 40000  # ms between automatic boss spawns
+MONSTER2_SPAWN_CHANCE = 0.2  # chance to spawn Monster2 instead of Enemy
 
 
 class Game:
@@ -518,6 +518,8 @@ class Game:
         self.spawn_timer += 1
         if self.spawn_timer >= SPAWN_DELAY:
             self.spawn_timer = 0
+            if not getattr(self, "tutorial_mode", False) and len(self.enemies) < 5:
+                self.spawn_enemy()
             # không spawn enemy khi đang tutorial
             if not getattr(self, "tutorial_mode", False):
                 self.spawn_enemy()   # gọi helper
@@ -793,7 +795,7 @@ class Game:
             for l in lasers:
                 if not getattr(l, 'hit_done', False) and not is_invincible:
                     try:
-                        self.player.health -= 20
+                        self.player.health -= 10
                         l.hit_done = True
                         SoundManager.play_hurt_sound()
                     except Exception:
@@ -831,9 +833,9 @@ class Game:
                 self.player.hit_timer = now
                 
                 if getattr(enemy, "type", "") == "boss":
-                    self.player.health -= 20
+                    self.player.health -=10
                 else:
-                    self.player.health -= 10
+                    self.player.health -= 5
                     enemy.kill() # Chỉ xóa quái thường khi player thực sự nhận sát thương
         # Nếu đang ở tutorial, kiểm tra điều kiện hoàn thành: player đi tới gần mép phải map
         if getattr(self, "tutorial_mode", False) and self.player is not None:
