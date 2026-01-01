@@ -1,4 +1,4 @@
-# main.py
+# main.pyx
 import pygame
 import sys
 import random
