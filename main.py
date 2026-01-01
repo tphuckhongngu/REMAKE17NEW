@@ -155,7 +155,7 @@ class Game:
         self.has_played_begin_sound = False
         # damage flash
         self.hit_timer = 0  # Thời gian còn lại để nhấp nháy
-        self.flash_duration = 200 # Nhấp nháy trong 200ms (0.2 giây)
+        self.flash_duration = 500 # Nhấp nháy trong 500ms (0.5 giây)
     # ---------------- helper ----------------
     def find_free_tile_center(self, avoid_pos=None, min_dist=0):
         """
@@ -506,6 +506,9 @@ class Game:
         # camera update (theo player)
         if self.player is not None:
             self.camera.update(self.player)
+        # Thêm điều kiện kiểm tra thời gian bất tử (ví dụ: 500ms)
+        now = pygame.time.get_ticks()
+        is_invincible = now - getattr(self.player, 'hit_timer', 0) < self.flash_duration
 
         # xử lý bắn: gọi Player.shoot() khi chuột nhấn (Player quản lý fire rate)
         if self.player is not None and pygame.mouse.get_pressed()[0]:
@@ -553,7 +556,6 @@ class Game:
                     if isinstance(atk, BossBullet):
                         self.boss_bullets.add(atk)
                     elif isinstance(atk, PoisonPool):
-                        atk.damage_interval = 500
                         self.poison_pools.add(atk)
                     elif isinstance(atk, Laser):
                         self.lasers.add(atk)
@@ -733,6 +735,7 @@ class Game:
                             if self.ui.score > self.ui.high_score:
                                 self.ui.high_score = self.ui.score
                                 self.ui.save_high_score()
+                        self.last_boss_time = pygame.time.get_ticks()        
                     except Exception:
                         pass
                     # reset persistent health for next full boss
@@ -755,13 +758,12 @@ class Game:
 
         # Thêm vào cuối hàm update() trong main.py
         if self.player is not None:
-            # 1. Va chạm với đạn thường của Boss
             if pygame.sprite.spritecollide(self.player, self.boss_bullets, True):
-                self.player.health -= 10  # Trừ máu trực tiếp
-                self.player.hit_timer = pygame.time.get_ticks() # Hiệu ứng nhấp nháy
-                self.trigger_hit_effect()
-                SoundManager.play_hurt_sound() # Phát âm thanh khi trúng đòn
-
+                if not is_invincible: # THÊM DÒNG NÀY
+                    self.player.health -= 10  
+                    self.player.hit_timer = pygame.time.get_ticks() 
+                    self.trigger_hit_effect()
+                    SoundManager.play_hurt_sound()
             # 2. Va chạm với đầm lầy độc (Poison Pool)
             pool_hits = pygame.sprite.spritecollide(self.player, self.poison_pools, False)
             for pool in pool_hits:
@@ -789,7 +791,7 @@ class Game:
         try:
             lasers = pygame.sprite.spritecollide(self.player, self.lasers, False)
             for l in lasers:
-                if not getattr(l, 'hit_done', False):
+                if not getattr(l, 'hit_done', False) and not is_invincible:
                     try:
                         self.player.health -= 20
                         l.hit_done = True
@@ -821,10 +823,7 @@ class Game:
         except Exception:
             pass
         # Trong Game.update()
-        # Thêm điều kiện kiểm tra thời gian bất tử (ví dụ: 500ms)
-        now = pygame.time.get_ticks()
-        is_invincible = now - getattr(self.player, 'hit_timer', 0) < self.flash_duration
-
+        
         hits = pygame.sprite.spritecollide(self.player, self.enemies, False)
         for enemy in hits:
             if not is_invincible: # Chỉ xử lý nếu player không trong thời gian hậu trúng đòn
