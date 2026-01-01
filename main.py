@@ -872,30 +872,9 @@ class Game:
             self.skill_manager.handle_input()                    # nhận phím 1,2,3,4
             self.skill_manager.check_magic_ball_hits()           # skill quả cầu va chạm enemy
             self.skill_manager.check_barrage_hits()              # skill barrage va chạm enemy
-        # check boss victory condition (if a boss was spawned and none remain)
+        # delegate boss victory/fallback checks to centralized logic (respects pending window)
         try:
-            if getattr(self, 'boss_spawned', False):
-                boss_exists = any(e.__class__.__name__ == 'Boss' or getattr(e, 'type', '') == 'boss' for e in self.enemies)
-                if not boss_exists:
-                    # boss defeated -> victory
-                    try:
-                        print("DEBUG: No Boss instances remain - triggering VICTORY state")
-                    except Exception:
-                        pass
-                    self.boss_spawned = False
-                    self.game_state = "VICTORY"
-                    try:
-                        # record time of entering victory to ignore immediate accidental clicks
-                        self.victory_entered_at = pygame.time.get_ticks()
-                    except Exception:
-                        self.victory_entered_at = 0
-                    # Clear any pending mouse clicks to avoid queued input immediately restarting the game
-                    try:
-                        pygame.event.clear(pygame.MOUSEBUTTONDOWN)
-                        pygame.event.clear(pygame.MOUSEBUTTONUP)
-                    except Exception:
-                        pass
-                    SoundManager.stop_music()
+            post_update_boss_check(self)
         except Exception:
             pass
 
