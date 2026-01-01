@@ -11,7 +11,7 @@ from ui import UI
 from events import EventHandler
 from sounds import SoundManager
 from enemy import Enemy, Monster2, load_enemy_sprites
-from boss import Boss
+from boss import Boss ,BossBullet, PoisonPool, Laser, Web
 from camera import Camera
 from maps.map_manager import MapManager
 from maps import trainingmap
@@ -549,8 +549,6 @@ class Game:
                     atk = e.pending_attacks.pop(0)
                     self.all_sprites.add(atk)
                     
-                    # Phân loại đạn dựa trên class thực tế
-                    from boss import BossBullet, PoisonPool, Laser, Web # Import nếu cần
                     
                     if isinstance(atk, BossBullet):
                         self.boss_bullets.add(atk)
@@ -771,15 +769,6 @@ class Game:
                 if hasattr(pool, 'apply_damage'):
                     pool.apply_damage(self.player)
 
-        # boss bullets hit player
-        try:
-            bb_hits = pygame.sprite.spritecollide(self.player, self.boss_bullets, True)
-            for b in bb_hits:
-                SoundManager.play_hurt_sound()
-                self.player.hit_timer = pygame.time.get_ticks()
-                self.player.health -= 12
-        except Exception:
-            pass
 
         # poison pools damage over time
         try:
@@ -838,15 +827,15 @@ class Game:
 
         hits = pygame.sprite.spritecollide(self.player, self.enemies, False)
         for enemy in hits:
-            if not is_invincible:
-                self.player.hit_timer = now
+            if not is_invincible: # Chỉ xử lý nếu player không trong thời gian hậu trúng đòn
                 SoundManager.play_hurt_sound()
+                self.player.hit_timer = now
                 
                 if getattr(enemy, "type", "") == "boss":
                     self.player.health -= 20
                 else:
                     self.player.health -= 10
-                    enemy.kill() # Chỉ giết quái thường khi va chạm
+                    enemy.kill() # Chỉ xóa quái thường khi player thực sự nhận sát thương
         # Nếu đang ở tutorial, kiểm tra điều kiện hoàn thành: player đi tới gần mép phải map
         if getattr(self, "tutorial_mode", False) and self.player is not None:
             try:
