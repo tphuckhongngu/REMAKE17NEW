@@ -24,7 +24,7 @@ from teleport_gate import TeleportGate
 # tinh chỉnh spawn (pixel)
 ENEMY_SPAWN_MIN_DIST = 200   # tối thiểu khoảng cách spawn enemy cách player (pixel)
 ENEMY_SPAWN_TRIES = 500      # số lần thử tìm tile trống trước khi fallback
-BOSS_SPAWN_INTERVAL = 10000  # ms between automatic boss spawns
+BOSS_SPAWN_INTERVAL = 25000  # ms between automatic boss spawns
 MONSTER2_SPAWN_CHANCE = 0.35  # chance to spawn Monster2 instead of Enemy
 
 
@@ -539,30 +539,28 @@ class Game:
                 self.spawn_boss()
             self.last_boss_score += 150
 
-        # collect pending attacks from bosses and add them to appropriate groups
-        try:
-            for e in list(self.enemies):
-                if getattr(e, 'pending_attacks', None):
-                    while e.pending_attacks:
-                        atk = e.pending_attacks.pop(0)
-                        try:
-                            self.all_sprites.add(atk)
-                        except Exception:
-                            pass
-                        # categorize
-                        cname = atk.__class__.__name__
-                        if cname == 'BossBullet':
-                            self.boss_bullets.add(atk)
-                        elif cname == 'PoisonPool':
-                            # add small defaults used by main collision
-                            atk.damage_interval = getattr(atk, 'damage_interval', 500)
-                            self.poison_pools.add(atk)
-                        elif cname == 'Laser':
-                            self.lasers.add(atk)
-                        elif cname == 'Web':
-                            self.webs.add(atk)
-        except Exception:
-            pass
+        # Tìm đoạn này trong hàm update() của bạn và thay bằng:
+
+        # Thu thập đòn đánh từ Boss
+        for e in list(self.enemies):
+            # Kiểm tra xem enemy có phải là Boss không và có đòn đánh chờ xử lý không
+            if isinstance(e, Boss) and hasattr(e, 'pending_attacks'):
+                while e.pending_attacks:
+                    atk = e.pending_attacks.pop(0)
+                    self.all_sprites.add(atk)
+                    
+                    # Phân loại đạn dựa trên class thực tế
+                    from boss import BossBullet, PoisonPool, Laser, Web # Import nếu cần
+                    
+                    if isinstance(atk, BossBullet):
+                        self.boss_bullets.add(atk)
+                    elif isinstance(atk, PoisonPool):
+                        atk.damage_interval = 500
+                        self.poison_pools.add(atk)
+                    elif isinstance(atk, Laser):
+                        self.lasers.add(atk)
+                    elif isinstance(atk, Web):
+                        self.webs.add(atk)
 
         # --- Tutorial practice detection ---
         if getattr(self, "tutorial_mode", False) and getattr(self, 'npc', None) is not None and not self.tutorial_followup_done:
@@ -757,20 +755,21 @@ class Game:
                             pass
                 enemy.kill()
 
-        # va chạm quái - player
+        # Thêm vào cuối hàm update() trong main.py
         if self.player is not None:
-            hits_player = pygame.sprite.spritecollide(self.player, self.enemies, False)
-            for enemy in hits_player:
-                SoundManager.play_hurt_sound()
+            # 1. Va chạm với đạn thường của Boss
+            if pygame.sprite.spritecollide(self.player, self.boss_bullets, True):
+                self.player.health -= 10  # Trừ máu trực tiếp
+                self.player.hit_timer = pygame.time.get_ticks() # Hiệu ứng nhấp nháy
+                self.trigger_hit_effect()
+                SoundManager.play_hurt_sound() # Phát âm thanh khi trúng đòn
 
-                # Lưu mốc thời gian bị đánh trúng
-                self.player.hit_timer = pygame.time.get_ticks()
-                
-                if getattr(enemy, "type", "") == "boss":
-                    self.player.health -= 20
-                else:
-                    self.player.health -= 10
-                enemy.kill()
+            # 2. Va chạm với đầm lầy độc (Poison Pool)
+            pool_hits = pygame.sprite.spritecollide(self.player, self.poison_pools, False)
+            for pool in pool_hits:
+                # Giả sử PoisonPool có hàm gây dame theo thời gian
+                if hasattr(pool, 'apply_damage'):
+                    pool.apply_damage(self.player)
 
         # boss bullets hit player
         try:
@@ -832,7 +831,22 @@ class Game:
                     pass
         except Exception:
             pass
+        # Trong Game.update()
+        # Thêm điều kiện kiểm tra thời gian bất tử (ví dụ: 500ms)
+        now = pygame.time.get_ticks()
+        is_invincible = now - getattr(self.player, 'hit_timer', 0) < self.flash_duration
 
+        hits = pygame.sprite.spritecollide(self.player, self.enemies, False)
+        for enemy in hits:
+            if not is_invincible:
+                self.player.hit_timer = now
+                SoundManager.play_hurt_sound()
+                
+                if getattr(enemy, "type", "") == "boss":
+                    self.player.health -= 20
+                else:
+                    self.player.health -= 10
+                    enemy.kill() # Chỉ giết quái thường khi va chạm
         # Nếu đang ở tutorial, kiểm tra điều kiện hoàn thành: player đi tới gần mép phải map
         if getattr(self, "tutorial_mode", False) and self.player is not None:
             try:
