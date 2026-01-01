@@ -1138,9 +1138,12 @@ class Game:
         except Exception:
             pass
 
-        pygame.display.flip()
         if self.skill_manager:
-            self.skill_manager.draw_icons(self.screen)
+            try:
+                self.skill_manager.draw_icons(self.screen)
+            except Exception:
+                pass
+        pygame.display.flip()
 
     def run(self):
         while True:
