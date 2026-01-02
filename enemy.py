@@ -160,12 +160,15 @@ class Enemy(pygame.sprite.Sprite):
         # perform movement with collision
         self.move(final_move.x, final_move.y)
 
-        # Nếu là boss, thay sprites trái/phải theo player
-        if self.type == "boss":
-            if self.player.pos.x > self.pos.x:
-                self.sprites = enemy_sprites_mon2_right
-            else:
-                self.sprites = enemy_sprites_mon2_left
+        # If this is a boss or mini-boss, choose left/right sprites by player position
+        if self.type in ("boss", "mini-boss"):
+            try:
+                if self.player.pos.x > self.pos.x:
+                    self.sprites = enemy_sprites_mon2_right
+                else:
+                    self.sprites = enemy_sprites_mon2_left
+            except Exception:
+                pass
 
         # update animation frame
         self.current_frame = (self.current_frame + self.animation_speed) % len(self.sprites)
@@ -183,10 +186,12 @@ class Monster2(Enemy):
         self.animation_speed = 0.15
 
         spawn_side = random.choice(["left", "right"])
+        # spawn_side indicates which side of the map the boss appears from.
+        # Use matching left/right sprite sets so the head faces the correct direction.
         if spawn_side == "left":
-            self.sprites = enemy_sprites_mon2_right
-        else:
             self.sprites = enemy_sprites_mon2_left
+        else:
+            self.sprites = enemy_sprites_mon2_right
 
         if not self.sprites:
             self.sprites = [pygame.Surface((200, 140))]

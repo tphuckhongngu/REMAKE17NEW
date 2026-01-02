@@ -9,12 +9,29 @@ from game_logic import process_enemy_death
 
 SKILLS_DIR = os.path.join(os.path.dirname(__file__), "skills")
 
+
+# Safe print helper to avoid UnicodeEncodeError on Windows consoles
+def safe_print(msg):
+    try:
+        print(msg)
+    except Exception:
+        try:
+            print(str(msg).encode('ascii', errors='replace').decode('ascii'))
+        except Exception:
+            try:
+                import sys
+                enc = sys.stdout.encoding or 'utf-8'
+                out = str(msg).encode(enc, errors='replace').decode(enc)
+                sys.stdout.write(out + "\n")
+            except Exception:
+                pass
+
 def load_skill_img(filename):
     try:
         path = os.path.join(SKILLS_DIR, filename)
         return pygame.image.load(path).convert_alpha()
     except Exception as e:
-        print(f"[WARNING] Không load được {filename}: {e}")
+        safe_print(f"[WARNING] Không load được {filename}: {e}")
         surf = pygame.Surface((80, 80), pygame.SRCALPHA)
         colors = {1: (0, 200, 0), 2: (200, 100, 0), 3: (100, 100, 255), 4: (255, 200, 0)}
         try:
@@ -27,6 +44,40 @@ def load_skill_img(filename):
         text = font.render(str(num), True, (255, 255, 255))
         surf.blit(text, text.get_rect(center=surf.get_rect().center))
         return surf
+    return surf
+
+
+def load_sequence_frames(folder_name='vuno'):
+    """Load ordered image frames from a folder inside `skills`.
+
+    Looks for `skills/<folder_name>/` and loads all image files sorted
+    numerically when filenames start with digits, otherwise lexicographically.
+    Returns an empty list if nothing is found.
+    """
+    frames = []
+    folder = os.path.join(SKILLS_DIR, folder_name)
+    if not os.path.isdir(folder):
+        return frames
+    try:
+        import re
+        files = os.listdir(folder)
+        def _sort_key(name):
+            m = re.match(r'^(\d+)', name)
+            if m:
+                return (0, int(m.group(1)), name)
+            return (1, name.lower())
+        files = sorted(files, key=_sort_key)
+        for fn in files:
+            if fn.lower().endswith(('.png', '.jpg', '.jpeg', '.bmp', '.webp')):
+                try:
+                    surf = pygame.image.load(os.path.join(folder, fn)).convert_alpha()
+                    frames.append(surf)
+                except Exception:
+                    continue
+        safe_print(f"[load_sequence_frames] loaded {len(frames)} frames from {folder}")
+    except Exception as e:
+        safe_print(f"[load_sequence_frames] error scanning {folder}: {e}")
+    return frames
 
 SKILL_ICON_SIZE = 400
 
@@ -66,6 +117,94 @@ class InvincibilityEffect(pygame.sprite.Sprite):
         # Vòng sáng vàng
         pygame.draw.circle(self.image, (255, 255, 0, alpha), (100, 100), 80, 10)
 
+
+class Explosion(pygame.sprite.Sprite):
+    """Plays a short explosion animation from a list of frames.
+
+    Optionally accepts an `on_finished` callback and a `pending_enemies` list.
+    The callback will be invoked with the pending_enemies when the animation
+    completes (or the fallback life expires).
+    """
+    def __init__(self, pos, frames, frame_rate=4, on_finished=None, pending_enemies=None):
+        super().__init__()
+        self.frames = frames or []
+        self.frame_rate = max(1, int(frame_rate))
+        self.index = 0
+        self.counter = 0
+        self._on_finished = on_finished
+        # shallow copy to avoid mutation by caller
+        self.pending_enemies = list(pending_enemies) if pending_enemies else []
+        # If frames present, scale them so the animation covers the screen
+        if self.frames:
+            scaled = []
+            try:
+                for f in self.frames:
+                    try:
+                        w, h = f.get_width(), f.get_height()
+                        scale_ratio = max(WIDTH / max(1, w), HEIGHT / max(1, h))
+                        new_size = (max(int(w * scale_ratio), WIDTH), max(int(h * scale_ratio), HEIGHT))
+                        sf = pygame.transform.smoothscale(f, new_size)
+                        scaled.append(sf)
+                    except Exception:
+                        scaled.append(f)
+            except Exception:
+                scaled = list(self.frames)
+            self.frames = scaled
+            self.image = self.frames[0]
+            self.rect = self.image.get_rect(center=pos)
+        else:
+            # simple fallback circle
+            self.image = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+            pygame.draw.circle(self.image, (255, 160, 0), (WIDTH//2, HEIGHT//2), min(WIDTH, HEIGHT)//4)
+            self.rect = self.image.get_rect(center=pos)
+            # longer visible lifetime for fallback
+            self.life = max(30, int(self.frame_rate * 30))
+
+    def _finish(self):
+        # Invoke callback before killing sprite
+        try:
+            if callable(self._on_finished):
+                try:
+                    self._on_finished(self.pending_enemies)
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
+    def update(self):
+        # If there are no frames available, show the fallback image for a short time
+        if not self.frames:
+            try:
+                self.life -= 1
+            except AttributeError:
+                self.life = max(6, int(self.frame_rate * 6))
+                self.life -= 1
+            if self.life <= 0:
+                try:
+                    self._finish()
+                except Exception:
+                    pass
+                self.kill()
+            return
+
+        # advance frame based on frame_rate
+        self.counter += 1
+        if self.counter < self.frame_rate:
+            return
+        self.counter = 0
+        self.index += 1
+        if self.index >= len(self.frames):
+            try:
+                self._finish()
+            except Exception:
+                pass
+            self.kill()
+            return
+        # keep center stable between frames
+        center = self.rect.center
+        self.image = self.frames[self.index]
+        self.rect = self.image.get_rect(center=center)
+
 class SkillManager:
     def __init__(self, game, player, all_sprites, enemies):
         # keep reference to game so skills can trigger game-level effects (scores, boss death handling)
@@ -75,6 +214,11 @@ class SkillManager:
         self.enemies = enemies
 
         self.barrage_bullets = pygame.sprite.Group()
+        # preload explosion frames for Skill 4 from folder 'vuno'
+        try:
+            self.explosion_frames = load_sequence_frames('vuno')
+        except Exception:
+            self.explosion_frames = []
 
         def load_square_icon(filename):
             original = load_skill_img(filename)
@@ -137,87 +281,147 @@ class SkillManager:
         
 
     def handle_input(self):
-        keys = pygame.key.get_pressed()
-        now = pygame.time.get_ticks()
-        if keys[pygame.K_1] and now > self.cooldown_end[1]:
-            self.activate_skill_1()
-            self.cooldown_end[1] = now + self.cooldown_duration[1]
-        if keys[pygame.K_2] and now > self.cooldown_end[2]:
-            self.activate_skill_2(now)
-            self.cooldown_end[2] = now + self.cooldown_duration[2]
-        if keys[pygame.K_3] and now > self.cooldown_end[3]:
-            self.activate_skill_3()
-            self.cooldown_end[3] = now + self.cooldown_duration[3]
-        if keys[pygame.K_4] and now > self.cooldown_end[4]:
-            self.activate_skill_4()
-            self.cooldown_end[4] = now + self.cooldown_duration[4]
+        # Polling keys here can interact poorly with IME; keep defensive.
+        try:
+            keys = pygame.key.get_pressed()
+            now = pygame.time.get_ticks()
+            if keys[pygame.K_1] and now > self.cooldown_end.get(1, 0):
+                try:
+                    self.activate_skill_1()
+                except Exception as e:
+                    safe_print('[Skill] activate_skill_1 error: ' + str(e))
+                self.cooldown_end[1] = now + self.cooldown_duration.get(1, 0)
+            if keys[pygame.K_2] and now > self.cooldown_end.get(2, 0):
+                try:
+                    self.activate_skill_2(now)
+                except Exception as e:
+                    safe_print('[Skill] activate_skill_2 error: ' + str(e))
+                self.cooldown_end[2] = now + self.cooldown_duration.get(2, 0)
+            if keys[pygame.K_3] and now > self.cooldown_end.get(3, 0):
+                try:
+                    self.activate_skill_3()
+                except Exception as e:
+                    safe_print('[Skill] activate_skill_3 error: ' + str(e))
+                self.cooldown_end[3] = now + self.cooldown_duration.get(3, 0)
+            if keys[pygame.K_4] and now > self.cooldown_end.get(4, 0):
+                try:
+                    self.activate_skill_4()
+                except Exception as e:
+                    safe_print('[Skill] activate_skill_4 error: ' + str(e))
+                self.cooldown_end[4] = now + self.cooldown_duration.get(4, 0)
+        except Exception as e:
+            safe_print('[Skill] handle_input exception: ' + str(e))
 
     def activate_skill_1(self):
-        print("[Skill 1] Hồi máu +30")
+        safe_print("[Skill 1] Hoi mau +30")
         try:
-            SoundManager.play_heal_sound()
-            self.player.health = min(100, self.player.health + 30)
+            # Apply heal first (don't rely on sound)
+            try:
+                if self.player is not None and hasattr(self.player, 'health'):
+                    self.player.health = min(100, self.player.health + 30)
+            except Exception as e:
+                safe_print('[Skill 1] health update error: ' + str(e))
+            try:
+                SoundManager.play_heal_sound()
+            except Exception as e:
+                safe_print('[Skill 1] sound error: ' + str(e))
         except Exception as e:
-            print("[Skill 1] LỖI:", str(e))
+            safe_print('[Skill 1] unexpected error: ' + str(e))
 
     def activate_skill_2(self, now):
-        print("[Skill 2] Boost damage boss +5 trong 10 giây")
+        safe_print("[Skill 2] Boost damage boss +5 for 10s")
         try:
-            SoundManager.play_powerup_sound()
+            try:
+                SoundManager.play_powerup_sound()
+            except Exception as e:
+                safe_print('[Skill 2] sound error: ' + str(e))
             self.skill2_boost_end = now + 10000
         except Exception as e:
-            print("[Skill 2] LỖI:", str(e))
+            safe_print('[Skill 2] unexpected error: ' + str(e))
 
     def activate_skill_3(self):
-        print("[Skill 3] BẤT TỬ THẦN - INVINCIBILITY 8 GIÂY!")
+        safe_print('[Skill 3] INVINCIBILITY 8s')
         try:
-            SoundManager.play_magic_sound()  # hoặc powerup sound
-
-            # Bật bất tử cho player
             try:
-                self.player.invincible = True
-            except:
-                setattr(self.player, 'invincible', True)
+                SoundManager.play_magic_sound()
+            except Exception as e:
+                safe_print('[Skill 3] sound error: ' + str(e))
 
-            # Hiệu ứng hào quang vàng
-            effect = InvincibilityEffect(self.player)
-            self.effects.add(effect)
-            self.all_sprites.add(effect)
+            # Set invincible flag safely
+            try:
+                if self.player is None:
+                    safe_print('[Skill 3] no player')
+                    return
+                self.player.invincible = True
+            except Exception:
+                try:
+                    setattr(self.player, 'invincible', True)
+                except Exception as e:
+                    safe_print('[Skill 3] set flag error: ' + str(e))
+                    return
+
+            # Add visual effect
+            try:
+                effect = InvincibilityEffect(self.player)
+                try:
+                    self.effects.add(effect)
+                except Exception:
+                    pass
+                try:
+                    self.all_sprites.add(effect)
+                except Exception:
+                    pass
+            except Exception as e:
+                safe_print('[Skill 3] effect error: ' + str(e))
         except Exception as e:
-            print("[Skill 3] LỖI:", str(e))
+            safe_print('[Skill 3] unexpected error: ' + str(e))
 
     def activate_skill_4(self):
-        print("[Skill 4] Bullet Barrage!")
+        safe_print("[Skill 4] Mega Explosion!")
         try:
-            SoundManager.play_barrage_sound()
-            class BarrageBullet(pygame.sprite.Sprite):
-                def __init__(self, pos, vel):
-                    super().__init__()
-                    length = 50
-                    width = 12
-                    self.original_image = pygame.Surface((length, width), pygame.SRCALPHA)
-                    pygame.draw.rect(self.original_image, (255, 255, 255), (0, 0, length, width))
-                    pygame.draw.rect(self.original_image, (0, 255, 255), (0, 0, length, width), 4)
-                    angle = math.degrees(math.atan2(-vel.y, vel.x))
-                    self.image = pygame.transform.rotate(self.original_image, angle)
-                    self.rect = self.image.get_rect(center=pos)
-                    self.vel = vel
-                    self.pos = pygame.Vector2(pos)
-                def update(self):
-                    self.pos += self.vel
-                    self.rect.center = (int(self.pos.x), int(self.pos.y))
-                    if not pygame.Rect(-2000, -2000, WIDTH + 4000, HEIGHT + 4000).colliderect(self.rect):
-                        self.kill()
+            try:
+                SoundManager.play_barrage_sound()
+            except Exception:
+                pass
 
-            for i in range(8):
-                angle = math.radians(i * 45)
-                vel = pygame.Vector2(math.cos(angle), math.sin(angle)) * 14
-                bullet = BarrageBullet(self.player.rect.center, vel)
-                self.barrage_bullets.add(bullet)
-                self.all_sprites.add(bullet)
+            # Explosion position: try player center, otherwise center of screen
+            try:
+                pos = self.player.rect.center
+            except Exception:
+                pos = (WIDTH // 2, HEIGHT // 2)
+
+            # spawn explosion animation
+            try:
+                # gather enemies now but delay destruction until explosion finishes
+                enemies_copy = list(self.enemies)
+
+                def _on_explosion_finished(pending_list):
+                    try:
+                        for en in list(pending_list):
+                            try:
+                                process_enemy_death(self.game, en)
+                            except Exception:
+                                try:
+                                    en.kill()
+                                except Exception:
+                                    pass
+                    except Exception:
+                        pass
+
+                frames = getattr(self, 'explosion_frames', []) or []
+                safe_print(f"[Skill 4] spawning Explosion with {len(frames)} frames")
+                expl = Explosion(pos, frames, frame_rate=6,
+                                 on_finished=_on_explosion_finished,
+                                 pending_enemies=enemies_copy)
+                try:
+                    self.all_sprites.add(expl)
+                except Exception:
+                    pass
+            except Exception as e:
+                safe_print('[Skill 4] setup explosion error: ' + str(e))
 
         except Exception as e:
-            print("[Skill 4] LỖI:", str(e))
+            safe_print('[Skill 4] unexpected error: ' + str(e))
 
     def is_boss_damage_boosted(self):
         return pygame.time.get_ticks() < self.skill2_boost_end
@@ -229,6 +433,26 @@ class SkillManager:
         hits = pygame.sprite.groupcollide(self.barrage_bullets, self.enemies, True, False)
         for bullet, enemies_hit in hits.items():
             for enemy in enemies_hit:
+                # spawn explosion effect at bullet position (fallback to enemy center)
+                try:
+                    pos = None
+                    try:
+                        pos = bullet.rect.center
+                    except Exception:
+                        pos = None
+                    if pos is None and hasattr(enemy, 'rect'):
+                        pos = enemy.rect.center
+                    if pos is not None:
+                        if getattr(self, 'explosion_frames', None):
+                            expl = Explosion(pos, self.explosion_frames, frame_rate=4)
+                        else:
+                            expl = Explosion(pos, [], frame_rate=4)
+                        try:
+                            self.all_sprites.add(expl)
+                        except Exception:
+                            pass
+                except Exception:
+                    pass
                 if hasattr(enemy, 'take_damage'):
                     damage = 15 if enemy.__class__.__name__ == 'Boss' else 30
                     enemy.take_damage(damage)
