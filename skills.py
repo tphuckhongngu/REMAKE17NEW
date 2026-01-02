@@ -10,7 +10,6 @@ from game_logic import process_enemy_death
 SKILLS_DIR = os.path.join(os.path.dirname(__file__), "skills")
 
 
-# Safe print helper to avoid UnicodeEncodeError on Windows consoles
 def safe_print(msg):
     try:
         print(msg)
@@ -341,87 +340,55 @@ class SkillManager:
 
     def activate_skill_3(self):
         safe_print('[Skill 3] INVINCIBILITY 8s')
+        SoundManager.play_magic_sound()
+        # Set invincible flag safely
         try:
-            try:
-                SoundManager.play_magic_sound()
-            except Exception as e:
-                safe_print('[Skill 3] sound error: ' + str(e))
+            if self.player is None:
+                safe_print('[Skill 3] no player')
+                return
+            self.player.invincible = True
+        except Exception:
+            setattr(self.player, 'invincible', True)
+        # Add visual effect
 
-            # Set invincible flag safely
-            try:
-                if self.player is None:
-                    safe_print('[Skill 3] no player')
-                    return
-                self.player.invincible = True
-            except Exception:
-                try:
-                    setattr(self.player, 'invincible', True)
-                except Exception as e:
-                    safe_print('[Skill 3] set flag error: ' + str(e))
-                    return
-
-            # Add visual effect
-            try:
-                effect = InvincibilityEffect(self.player)
-                try:
-                    self.effects.add(effect)
-                except Exception:
-                    pass
-                try:
-                    self.all_sprites.add(effect)
-                except Exception:
-                    pass
-            except Exception as e:
-                safe_print('[Skill 3] effect error: ' + str(e))
-        except Exception as e:
-            safe_print('[Skill 3] unexpected error: ' + str(e))
-
+        effect = InvincibilityEffect(self.player)
+        self.effects.add(effect)
+        self.all_sprites.add(effect)
     def activate_skill_4(self):
-        safe_print("[Skill 4] Mega Explosion!")
+            SoundManager.play_barrage_sound()
+        # Explosion position: try player center, otherwise center of screen
         try:
+            pos = self.player.rect.center
+        except Exception:
+            pos = (WIDTH // 2, HEIGHT // 2)
+
+        # spawn explosion animation
+
+        # gather enemies now but delay destruction until explosion finishes
+        enemies_copy = list(self.enemies)
+
+        def _on_explosion_finished(pending_list):
             try:
-                SoundManager.play_barrage_sound()
+                for en in list(pending_list):
+                    try:
+                        process_enemy_death(self.game, en)
+                    except Exception:
+                        try:
+                            en.kill()
+                        except Exception:
+                            pass
             except Exception:
                 pass
 
-            # Explosion position: try player center, otherwise center of screen
-            try:
-                pos = self.player.rect.center
-            except Exception:
-                pos = (WIDTH // 2, HEIGHT // 2)
+        frames = getattr(self, 'explosion_frames', []) or []
+        expl = Explosion(pos, frames, frame_rate=6,
+                            on_finished=_on_explosion_finished,
+                            pending_enemies=enemies_copy)
+        try:
+            self.all_sprites.add(expl)
+        except Exception:
+            pass
 
-            # spawn explosion animation
-            try:
-                # gather enemies now but delay destruction until explosion finishes
-                enemies_copy = list(self.enemies)
-
-                def _on_explosion_finished(pending_list):
-                    try:
-                        for en in list(pending_list):
-                            try:
-                                process_enemy_death(self.game, en)
-                            except Exception:
-                                try:
-                                    en.kill()
-                                except Exception:
-                                    pass
-                    except Exception:
-                        pass
-
-                frames = getattr(self, 'explosion_frames', []) or []
-                safe_print(f"[Skill 4] spawning Explosion with {len(frames)} frames")
-                expl = Explosion(pos, frames, frame_rate=6,
-                                 on_finished=_on_explosion_finished,
-                                 pending_enemies=enemies_copy)
-                try:
-                    self.all_sprites.add(expl)
-                except Exception:
-                    pass
-            except Exception as e:
-                safe_print('[Skill 4] setup explosion error: ' + str(e))
-
-        except Exception as e:
-            safe_print('[Skill 4] unexpected error: ' + str(e))
 
     def is_boss_damage_boosted(self):
         return pygame.time.get_ticks() < self.skill2_boost_end

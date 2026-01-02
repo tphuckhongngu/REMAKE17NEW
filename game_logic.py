@@ -130,10 +130,6 @@ def process_enemy_death(game, enemy):
             pass
         # mark spawn false (no active boss) — keep victory_pending True to allow VICTORY flow
         game.boss_spawned = False
-
-        # Debug
-        print(f"DEBUG: Boss killed! Health: {getattr(enemy, 'health', 'N/A')} | ID: {id(enemy)}")
-
     else:
         # Enemy thường: +score theo score_value
         if (hasattr(enemy, 'score_value') and
@@ -180,7 +176,6 @@ def post_update_boss_check(game):
         if alive_bosses:
             # Còn boss sống → hủy pending victory
             game.victory_pending = False
-            print(f"DEBUG: post_update - Còn {len(alive_bosses)} boss sống → hủy VICTORY pending")
             return
 
         # Không còn boss sống → kiểm tra nguyên nhân
@@ -191,7 +186,6 @@ def post_update_boss_check(game):
 
             if last_killed == 0:
                 # Không có bằng chứng player giết → boss tự biến mất (hết thời gian, blink timeout...)
-                print("DEBUG: Boss biến mất mà KHÔNG có player kill → KHÔNG THẮNG")
                 game.boss_spawned = False
                 game.victory_pending = False
                 return
@@ -200,17 +194,14 @@ def post_update_boss_check(game):
                 # Player thực sự giết boss gần đây → bắt đầu đếm delay
                 game.victory_pending = True
                 game.victory_pending_at = now
-                print("DEBUG: Player đã giết boss → bắt đầu đếm delay VICTORY")
             else:
                 # Quá lâu từ lúc giết → coi như boss cũ đã hết hạn
-                print("DEBUG: Boss chết quá lâu trước đây → không tính victory")
                 game.boss_spawned = False
                 game.victory_pending = False
             return
 
         # Đủ thời gian delay → HIỆN VICTORY
         if now - game.victory_pending_at >= delay:
-            print("DEBUG: Đủ delay → TRIGGER VICTORY!")
             game.game_state = "VICTORY"
             game.victory_pending = False
             game.boss_spawned = False
@@ -223,5 +214,4 @@ def post_update_boss_check(game):
             SoundManager.stop_music()
 
     except Exception as e:
-        print(f"DEBUG: post_update_boss_check error: {e}")
         pass

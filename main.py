@@ -238,14 +238,9 @@ class Game:
             now = pygame.time.get_ticks()
             entered = getattr(self, 'victory_entered_at', 0)
             if entered and now - entered < 500:
-                try:
-                    print("DEBUG: new_game() ignored due to recent victory (grace period)")
-                except Exception:
-                    pass
                 return
         except Exception:
             pass
-        print(f"DEBUG: new_game(start) tutorial={tutorial}")
         # reset toàn bộ
         self.all_sprites.empty()
         self.bullets.empty()
@@ -283,11 +278,9 @@ class Game:
         self.has_played_begin_sound = False
 
         # debug: kiểm tra collision rects (tùy in)
-        # print("collision rects:", len(self.map_manager.collision_rects))
 
         # set tutorial mode according to caller request
         self.tutorial_mode = bool(tutorial)
-        print(f"DEBUG: tutorial_mode set = {self.tutorial_mode}")
         # reset boss state
         self.boss_spawned = False
         # reset persistent boss health and any pending victory flags so each run starts fresh
@@ -394,19 +387,15 @@ class Game:
             self.player.frozen_until = 0
         except Exception:
             pass
-        print(f"DEBUG: player added to all_sprites, player exists: {self.player is not None}")
                 # Tạo SkillManager chỉ khi chơi thật (không phải tutorial/training)
         if not tutorial:
             try:
                 # SkillManager expects (game, player, all_sprites, enemies)
                 self.skill_manager = SkillManager(self, self.player, self.all_sprites, self.enemies)
-                print(f"DEBUG: skill_manager created: {self.skill_manager is not None}")
             except Exception as e:
-                print(f"DEBUG: failed to create skill_manager: {e}")
                 self.skill_manager = None
         else:
             self.skill_manager = None  # tắt hoàn toàn skill trong tutorial
-            print("DEBUG: tutorial mode - skill_manager disabled")
         # ngay lập tức center camera trên player để player xuất hiện giữa màn hình
         try:
             self.camera.update(self.player)
@@ -445,7 +434,6 @@ class Game:
             pass
 
         # đổi state + âm thanh
-        print("DEBUG: new_game - setting game_state = PLAYING")
         self.game_state = "PLAYING"
         SoundManager.stop_music()
         SoundManager.play_background_music(volume=0.5)
@@ -862,21 +850,11 @@ class Game:
         
         hits = pygame.sprite.spritecollide(self.player, self.enemies, False)
         for enemy in hits:
-            # debug trace collision
-            try:
-                print(f"DEBUG: Collision with {enemy.__class__.__name__} invincible={getattr(self.player,'invincible',False)} player_hit_timer={getattr(self.player,'hit_timer',0)} game_hit_timer={getattr(self,'hit_timer',0)} health_before={getattr(self.player,'health',None)}")
-            except Exception:
-                pass
-
             self.trigger_hit_effect()
 
             # Respect short invulnerability after being hit (flash window)
             try:
                 if is_invincible:
-                    try:
-                        print("DEBUG: Skipping collision damage due to short invulnerability window")
-                    except Exception:
-                        pass
                     continue
             except Exception:
                 pass
@@ -942,10 +920,6 @@ class Game:
                     except Exception:
                         pass
             # debug health after collision
-            try:
-                print(f"DEBUG: post-collision health={getattr(self.player,'health',None)}")
-            except Exception:
-                pass
            
         # Nếu đang ở tutorial, kiểm tra điều kiện hoàn thành: player đi tới gần mép phải map
         if getattr(self, "tutorial_mode", False) and self.player is not None:
@@ -1418,10 +1392,6 @@ class Game:
         self.all_sprites.add(boss)
         # mark that a boss is active so we can detect victory when it dies
         self.boss_spawned = True
-        try:
-            print(f"DEBUG: Boss spawned, boss_spawned set = True health={getattr(boss,'health',None)} max_health={getattr(boss,'max_health',None)} boss_persistent_health={getattr(self,'boss_persistent_health',None)}")
-        except Exception:
-            pass
         # Cuối hàm spawn_boss() trong main.py
         self.last_boss_time = pygame.time.get_ticks()
         self.boss_spawned = True

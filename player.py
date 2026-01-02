@@ -180,11 +180,6 @@ class Player(pygame.sprite.Sprite):
             except Exception:
                 # fallback: ignore add errors but keep debug
                 pass
-            # debug
-            try:
-                print(f"Shot bullet at {spawn} vel={vel}")
-            except Exception:
-                pass
 
         self.ammo -= 1
         self.last_shot = pygame.time.get_ticks()

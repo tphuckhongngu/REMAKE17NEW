@@ -21,13 +21,6 @@ class Bullet(pygame.sprite.Sprite):
         self.pos = pygame.math.Vector2(pos)
         self.vel = pygame.math.Vector2(vel)
         self.map_manager = map_manager
-
-        try:
-            print(f"Bullet created at {self.pos} vel={self.vel}")
-        except Exception:
-            pass
-
-
         self.spawn_time = pygame.time.get_ticks()
 
         # ===== AM THANH BAN =====
@@ -45,11 +38,6 @@ class Bullet(pygame.sprite.Sprite):
         if self.map_manager:
             for wall in self.map_manager.collision_rects:
                 if self.rect.colliderect(wall):
-                    # debug: nếu đạn bị kill ngay khi spawn, in ra vị trí
-                    try:
-                        print(f"Bullet collided with wall at {self.rect.center}")
-                    except Exception:
-                        pass
                     self.kill()
                     return
 

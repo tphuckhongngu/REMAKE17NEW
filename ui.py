@@ -25,7 +25,6 @@ class UI:
             self.continue_btn_img = pygame.transform.scale(self.continue_btn_img, (150, 50))
             self.continue_btn_rect = self.continue_btn_img.get_rect(center=(WIDTH // 2, HEIGHT // 2 + 50))
         except Exception as e:
-            print("Không thể load ảnh continue.png:", e)
             self.continue_btn_img = None
         # Prefer a bundled font that includes Vietnamese glyphs (DejaVu Sans),
         # fall back to common system fonts then to default.
@@ -145,7 +144,6 @@ class UI:
             self.about_slides.append(pygame.transform.scale(load_img('anhgd2', 'about4.png'), (WIDTH, HEIGHT)))     # Slide cuối
             # Thêm about5.png, about6.png... nếu cần
         except Exception as e:
-            print(f"Lỗi load slide About: {e}")
             # Fallback: ít nhất có slide đầu
             if not self.about_slides:
                 self.about_slides.append(self.about_us_bg)  # dùng biến cũ làm fallback
@@ -202,7 +200,6 @@ class UI:
                 self.btn_home_over = pygame.transform.scale(img_home, (400, 400))
             self.rect_home_over = self.btn_home_over.get_rect(midbottom=(WIDTH // 2, HEIGHT - 10))
         except Exception as e:
-            print(f"Lỗi tải ảnh Game Over: {e}")
             self.defeat_bg = pygame.Surface((WIDTH, HEIGHT))
             self.defeat_bg.fill((50, 0, 0))
 
@@ -213,7 +210,6 @@ class UI:
             img_victory = load_img('anh', 'victory.png')
             self.victory_bg = pygame.transform.scale(img_victory, (WIDTH, HEIGHT))
         except Exception as e:
-            print(f"Lỗi tải ảnh victory.png: {e}")
             self.victory_bg = None
 
         # Ensure game-over button surfaces and rects exist even if image loading failed
@@ -268,17 +264,13 @@ class UI:
         # ===== RANK HÌNH ẢNH - CHỈ HIỂN THỊ Ở HIGH SCORE =====
         self.rank_images = [None] * 8
         self.current_rank_index = 0
-        try:
-            rank_dir = os.path.join(BASE_DIR, 'ranks')
-            for i in range(1, 9):
-                path = os.path.join(rank_dir, f'rank{i}.png')
-                if os.path.exists(path):
-                    img = pygame.image.load(path).convert_alpha()
-                    self.rank_images[i-1] = pygame.transform.scale(img, (1100, 800))
-                else:
-                    print(f"Thiếu file: ranks/rank{i}.png")
-        except Exception as e:
-            print(f"Lỗi load rank images: {e}")
+        rank_dir = os.path.join(BASE_DIR, 'ranks')
+        for i in range(1, 9):
+            path = os.path.join(rank_dir, f'rank{i}.png')
+            if os.path.exists(path):
+                img = pygame.image.load(path).convert_alpha()
+                self.rank_images[i-1] = pygame.transform.scale(img, (1100, 800))
+
 
         # ================= PROFILES / CHARACTER CODex =================
         # Load profiles from separate module so they can be edited later
@@ -688,7 +680,6 @@ class UI:
 
             # helper hint intentionally removed per user request
         except Exception:
-            # last-resort fallback: leave screen blank (avoid printing GAME OVER)
             try:
                 self.screen.fill((0, 0, 0))
             except Exception:

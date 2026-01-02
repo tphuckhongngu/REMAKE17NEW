@@ -52,7 +52,6 @@ class UI:
             img = pygame.image.load(path).convert_alpha()
             return pygame.transform.scale(img, (60, 60))
         except Exception as e:
-            print(f"[UI] Không load được nút {filename}: {e}")
             # Fallback: hình tròn có chữ
             surf = pygame.Surface((60, 60), pygame.SRCALPHA)
             pygame.draw.circle(surf, (70, 70, 70), (30, 30), 28)
@@ -67,21 +66,19 @@ class UI:
                     self.high_score = data.get("high_score", 0)
                     self.recent_scores = data.get("recent", [])
         except Exception as e:
-            print(f"[UI] Lỗi load high score: {e}")
             self.high_score = 0
             self.recent_scores = []
 
     def save_high_score(self):
         """Lưu high score và recent scores"""
-        try:
-            data = {
-                "high_score": self.high_score,
-                "recent": self.recent_scores[-9:]  # giữ 10 điểm gần nhất
-            }
-            with open("highscore.json", "w", encoding="utf-8") as f:
-                json.dump(data, f, ensure_ascii=False, indent=4)
-        except Exception as e:
-            print(f"[UI] Lỗi lưu high score: {e}")
+
+        data = {
+            "high_score": self.high_score,
+            "recent": self.recent_scores[-9:]  # giữ 10 điểm gần nhất
+        }
+        with open("highscore.json", "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=4)
+
 
     def record_score(self, score):
         """Ghi điểm lần chơi này vào danh sách recent"""

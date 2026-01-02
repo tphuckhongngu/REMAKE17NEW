@@ -25,10 +25,8 @@ class Boss(pygame.sprite.Sprite):
                     # img = pygame.transform.scale(img, (128, 128)) 
                     self.frames.append(img)
                     self.delays.append(100)  # Mặc định 100ms mỗi frame
-                else:
-                    print(f"Cảnh báo: Không tìm thấy {path}")
             except Exception as e:
-                print(f"Lỗi khi nạp {path}: {e}")
+                pass
 
         # Nếu không nạp được ảnh nào, dùng hình tròn tạm thời làm fallback
         if not self.frames:
@@ -145,10 +143,6 @@ class Boss(pygame.sprite.Sprite):
         # record that the player killed the boss (which is required to trigger VICTORY).
         self.health -= amount * 2
         if self.health <= 0:
-            try:
-                print(f"DEBUG: Boss.take_damage - boss health <=0 (health={self.health}), marked dead (central handler will remove)")
-            except Exception:
-                pass
             # clamp health to zero and leave actual sprite removal to process_enemy_death
             try:
                 self.health = 0
