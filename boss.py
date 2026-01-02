@@ -140,13 +140,20 @@ class Boss(pygame.sprite.Sprite):
         # Boss is stationary: do not attempt to move (ignores map collision)
 
     def take_damage(self, amount):
+        # Reduce health; do NOT call self.kill() here to avoid removing the sprite
+        # before centralized death processing (`process_enemy_death`) has a chance to
+        # record that the player killed the boss (which is required to trigger VICTORY).
         self.health -= amount * 2
         if self.health <= 0:
             try:
-                print(f"DEBUG: Boss.take_damage - boss health <=0 (health={self.health}), killing boss")
+                print(f"DEBUG: Boss.take_damage - boss health <=0 (health={self.health}), marked dead (central handler will remove)")
             except Exception:
                 pass
-            self.kill()
+            # clamp health to zero and leave actual sprite removal to process_enemy_death
+            try:
+                self.health = 0
+            except Exception:
+                pass
 
     def get_center(self):
         return self.rect.center

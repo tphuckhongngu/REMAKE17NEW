@@ -2,385 +2,226 @@ import pygame
 from sounds import SoundManager
 from boss import Boss
 
+# Constants (đặt ở đầu để dễ chỉnh)
+VICTORY_DELAY_MS = 800          # Thời gian chờ trước khi hiện VICTORY (cho animation)
+VICTORY_ALLOWED_WINDOW_MS = VICTORY_DELAY_MS * 5  # Thời gian tối đa kể từ lúc player giết boss
+
 
 def handle_bullet_enemy_collisions(game):
-    """Handle bullet vs enemy collisions and boss death/victory triggers."""
+    """
+    Xử lý va chạm đạn ↔ enemy (bao gồm cả skill boost damage cho boss).
+    Khi enemy chết → chuyển toàn bộ xử lý cho process_enemy_death.
+    """
     try:
         hits = pygame.sprite.groupcollide(game.enemies, game.bullets, False, True)
         for enemy, bullets_hit in hits.items():
             dmg = len(bullets_hit)
-            # boss damage boost support
+
+            # Boss damage boost từ skill (nếu có)
             try:
-                if enemy.__class__.__name__ == 'Boss' and game.skill_manager and game.skill_manager.is_boss_damage_boosted():
+                if (enemy.__class__.__name__ == 'Boss' and
+                        game.skill_manager and
+                        game.skill_manager.is_boss_damage_boosted()):
                     dmg += 5
             except Exception:
                 pass
 
+            # Gây damage
             try:
                 if hasattr(enemy, 'take_damage'):
                     enemy.take_damage(dmg)
                 else:
                     enemy.hp = getattr(enemy, 'hp', 0) - dmg
             except Exception:
-                try:
-                    enemy.hp = getattr(enemy, 'hp', 0) - dmg
-                except Exception:
-                    pass
+                pass
 
-            # persist boss health
+            # Cập nhật persistent health cho boss
             try:
                 if enemy.__class__.__name__ == 'Boss':
                     game.boss_persistent_health = max(0, int(getattr(enemy, 'health', 0)))
             except Exception:
                 pass
 
-            # determine death
+            # Kiểm tra chết
+            died = False
             try:
-                died = False
                 if hasattr(enemy, 'health'):
-                    died = getattr(enemy, 'health', 0) <= 0
+                    died = enemy.health <= 0
                 elif hasattr(enemy, 'hp'):
-                    died = getattr(enemy, 'hp', 0) <= 0
+                    died = enemy.hp <= 0
                 else:
                     died = not enemy.alive()
             except Exception:
                 died = not enemy.alive()
 
             if died:
-                # delegate handling to shared helper so other systems (skills) can reuse
-                try:
-                    process_enemy_death(game, enemy)
-                except Exception:
-                    # fallback to previous behavior if helper fails
-                    try:
-                        if enemy.__class__.__name__ == 'Boss':
-                            try:
-                                if not getattr(game, 'tutorial_mode', False):
-                                    game.ui.score += 1000
-                                    if game.ui.score > game.ui.high_score:
-                                        game.ui.high_score = game.ui.score
-                                        game.ui.save_high_score()
-                            except Exception:
-                                pass
-                            try:
-                                game.last_boss_time = pygame.time.get_ticks()
-                            except Exception:
-                                pass
-                            try:
-                                game.boss_persistent_health = getattr(enemy, 'max_health', 100)
-                            except Exception:
-                                game.boss_persistent_health = 100
-                            try:
-                                enemy.kill()
-                            except Exception:
-                                pass
-                            try:
-                                rem = sum(1 for e in game.enemies if e.__class__.__name__ == 'Boss')
-                            except Exception:
-                                rem = 0
-                            try:
-                                print(f"DEBUG: boss died handling — remaining Boss count = {rem}")
-                            except Exception:
-                                pass
-                            try:
-                                print(f"DEBUG: Boss.take_damage -> killed boss: enemy={enemy.__class__.__name__} id={id(enemy)} health={getattr(enemy,'health',None)}")
-                            except Exception:
-                                pass
-                            try:
-                                game.boss_spawned = False
-                                game.boss_just_killed_at = pygame.time.get_ticks()
-                            except Exception:
-                                pass
-                        else:
-                            try:
-                                if hasattr(enemy, 'score_value') and not getattr(game, 'tutorial_mode', False):
-                                    game.ui.score += enemy.score_value
-                                    if game.ui.score > game.ui.high_score:
-                                        game.ui.high_score = game.ui.score
-                                        game.ui.save_high_score()
-                            except Exception:
-                                pass
-                            try:
-                                enemy.kill()
-                            except Exception:
-                                pass
-                    except Exception:
-                        pass
+                process_enemy_death(game, enemy)  # <-- TOÀN BỘ XỬ LÝ CHẾT Ở ĐÂY
+
     except Exception:
-        # swallow to avoid update crash
-        pass
+        pass  # Không để crash game
 
 
 def maybe_spawn_boss(game):
-    """Handle periodic and score-based boss spawn logic."""
+    """
+    Spawn boss theo thời gian hoặc khi score tăng đủ.
+    """
     try:
         if game.game_state != "PLAYING":
             return
+
         now = pygame.time.get_ticks()
-        has_boss = any([e.__class__.__name__ == 'Boss' for e in game.enemies])
+        has_boss = any(isinstance(e, Boss) for e in game.enemies)
         boss_interval = getattr(game, 'boss_spawn_interval', 40000)
-        if not has_boss and now - getattr(game, 'last_boss_time', 0) >= boss_interval:
+
+        # Spawn theo thời gian cố định
+        if not has_boss and (now - getattr(game, 'last_boss_time', 0) >= boss_interval):
             game.spawn_boss()
             game.last_boss_time = now
-            has_boss = True
 
-        # legacy score-based spawn
-        if getattr(game.ui, 'score', 0) - game.last_boss_score >= 100:
-            has_boss = any([e.__class__.__name__ == 'Boss' for e in game.enemies])
-            if not has_boss:
+        # Spawn theo score (legacy)
+        current_score = getattr(game.ui, 'score', 0)
+        if current_score - game.last_boss_score >= 100:
+            if not any(isinstance(e, Boss) for e in game.enemies):
                 game.spawn_boss()
             game.last_boss_score += 150
+
     except Exception:
         pass
 
 
 def process_enemy_death(game, enemy):
-    """Centralize handling when an enemy dies (boss or normal).
-
-    This allows damage from non-bullet sources (skills) to trigger the same
-    score, persistence and victory scheduling logic as bullet collisions.
+    """
+    Xử lý tập trung khi enemy chết (dù do đạn hay skill).
+    Đây là nơi duy nhất xử lý: +score, kill sprite, persistent health, set flag.
     """
     try:
-        # Determine type
-        is_boss = enemy.__class__.__name__ == 'Boss'
+        is_boss = isinstance(enemy, Boss)
     except Exception:
         is_boss = False
 
     if is_boss:
+        # +1000 điểm (chỉ khi không phải tutorial)
+        if not getattr(game, 'tutorial_mode', False):
+            try:
+                game.ui.score += 1000
+                if game.ui.score > game.ui.high_score:
+                    game.ui.high_score = game.ui.score
+                    game.ui.save_high_score()
+            except Exception:
+                pass
+
+        # Cập nhật thời gian & persistent health
+        game.last_boss_time = pygame.time.get_ticks()
+        game.boss_persistent_health = getattr(enemy, 'max_health', 100)
+
+        # tránh spawn boss ngay lập tức do nhảy điểm (+1000)
         try:
-            if not getattr(game, 'tutorial_mode', False):
-                try:
-                    game.ui.score += 1000
-                    if game.ui.score > game.ui.high_score:
-                        game.ui.high_score = game.ui.score
-                        game.ui.save_high_score()
-                except Exception:
-                    pass
-        except Exception:
-            pass
-        try:
-            game.last_boss_time = pygame.time.get_ticks()
-        except Exception:
-            pass
-        try:
-            game.boss_persistent_health = getattr(enemy, 'max_health', 100)
-        except Exception:
-            game.boss_persistent_health = 100
-        try:
-            enemy.kill()
-        except Exception:
-            pass
-        try:
-            rem = sum(1 for e in game.enemies if e.__class__.__name__ == 'Boss')
-        except Exception:
-            rem = 0
-        try:
-            print(f"DEBUG: boss died handling — remaining Boss count = {rem}")
+            game.last_boss_score = getattr(game.ui, 'score', getattr(game, 'last_boss_score', 0))
         except Exception:
             pass
 
+        # Đánh dấu là player vừa giết boss (rất quan trọng cho victory logic)
+        game.boss_just_killed_at = pygame.time.get_ticks()
+        # start the victory pending window immediately so post_update_boss_check won't early-return
         try:
-            boss_list = []
-            for s in list(game.all_sprites):
-                cname = getattr(s.__class__, '__name__', type(s).__name__)
-                t = getattr(s, 'type', '') or ''
-                name = getattr(s, 'name', '') or ''
-                if 'boss' in cname.lower() or 'boss' in str(t).lower() or 'boss' in str(name).lower():
-                    boss_list.append((cname, id(s), getattr(s, 'health', None), t, name))
-            print(f"DEBUG: boss-like sprites after kill: {boss_list}")
+            game.victory_pending = True
+            game.victory_pending_at = pygame.time.get_ticks()
         except Exception:
             pass
+        # mark spawn false (no active boss) — keep victory_pending True to allow VICTORY flow
+        game.boss_spawned = False
 
-        try:
-            print(f"DEBUG: Boss.take_damage -> killed boss: enemy={enemy.__class__.__name__} id={id(enemy)} health={getattr(enemy,'health',None)}")
-        except Exception:
-            try:
-                print("DEBUG: Boss.take_damage -> killed boss")
-            except Exception:
-                pass
-        try:
-            game.boss_spawned = False
-            game.boss_just_killed_at = pygame.time.get_ticks()
-        except Exception:
-            try:
-                game.boss_spawned = False
-                game.boss_just_killed_at = 0
-            except Exception:
-                pass
+        # Debug
+        print(f"DEBUG: Boss killed! Health: {getattr(enemy, 'health', 'N/A')} | ID: {id(enemy)}")
+
     else:
-        try:
-            if hasattr(enemy, 'score_value') and not getattr(game, 'tutorial_mode', False):
-                try:
-                    game.ui.score += enemy.score_value
-                    if game.ui.score > game.ui.high_score:
-                        game.ui.high_score = game.ui.score
-                        game.ui.save_high_score()
-                except Exception:
-                    pass
-        except Exception:
-            pass
-        try:
-            enemy.kill()
-        except Exception:
-            pass
+        # Enemy thường: +score theo score_value
+        if (hasattr(enemy, 'score_value') and
+                not getattr(game, 'tutorial_mode', False)):
+            try:
+                game.ui.score += enemy.score_value
+                if game.ui.score > game.ui.high_score:
+                    game.ui.high_score = game.ui.score
+                    game.ui.save_high_score()
+            except Exception:
+                pass
+
+    # Kill sprite (common cho cả boss và enemy)
+    try:
+        enemy.kill()
+    except Exception:
+        pass
 
 
 def post_update_boss_check(game):
-    """Fallback: if we expected a boss but none remain with >0 health, schedule/trigger victory.
-
-    Uses a short pending window (game.victory_delay_ms) so visuals/animations have time to finish.
+    """
+    Kiểm tra sau mỗi frame: nếu đã spawn boss nhưng không còn boss sống → trigger VICTORY.
+    CHỈ THẮNG nếu player thực sự giết boss (có boss_just_killed_at gần đây).
     """
     try:
+        # Nếu chưa từng spawn boss hoặc đang pending → bỏ qua
         if not getattr(game, 'boss_spawned', False) and not getattr(game, 'victory_pending', False):
             return
 
-        # Find any Boss instances in enemies or all_sprites
-        bosses = []
-        try:
-            bosses.extend([e for e in game.enemies if isinstance(e, Boss)])
-        except Exception:
-            pass
-        try:
-            bosses.extend([e for e in game.all_sprites if isinstance(e, Boss)])
-        except Exception:
-            pass
+        # Tìm tất cả instance Boss còn sống
+        bosses = [e for e in game.enemies if isinstance(e, Boss)]
+        bosses.extend([s for s in game.all_sprites if isinstance(s, Boss) and s not in bosses])
 
-        # Deduplicate in case the same boss is present in multiple sprite groups
-        try:
-            seen = set()
-            unique = []
-            for b in bosses:
-                if id(b) not in seen:
-                    seen.add(id(b))
-                    unique.append(b)
-            bosses = unique
-        except Exception:
-            pass
-
-        # Filter to bosses that are alive (health > 0) or conservatively assume alive
         alive_bosses = []
         for b in bosses:
             try:
-                h = getattr(b, 'health', None)
-                if h is None:
+                if getattr(b, 'health', 0) > 0:
                     alive_bosses.append(b)
-                else:
-                    if h > 0:
-                        alive_bosses.append(b)
             except Exception:
-                alive_bosses.append(b)
+                alive_bosses.append(b)  # an toàn: coi như còn sống nếu không xác định được
 
         now = pygame.time.get_ticks()
 
         if alive_bosses:
-            # there is at least one boss still alive; cancel any pending victory
-            try:
-                details = []
-                for b in alive_bosses:
-                    try:
-                        details.append((b.__class__.__name__, id(b), getattr(b, 'health', None), getattr(b, 'type', None)))
-                    except Exception:
-                        details.append((type(b).__name__, id(b), None, None))
-                print(f"DEBUG: post_update_boss_check - bosses present (alive): {len(alive_bosses)}; skipping VICTORY - {details}")
-            except Exception:
-                pass
-            # cancel pending victory if any (safety)
-            try:
-                game.victory_pending = False
-            except Exception:
-                pass
+            # Còn boss sống → hủy pending victory
+            game.victory_pending = False
+            print(f"DEBUG: post_update - Còn {len(alive_bosses)} boss sống → hủy VICTORY pending")
             return
 
-        # Extra safeguard: ensure no other ENEMY instances with type 'boss' remain (e.g., Monster2)
-        try:
-            suspicious = []
-            for s in list(game.enemies):
-                try:
-                    # if an enemy has type == 'boss' but is not an instance of Boss, consider it suspicious
-                    if not isinstance(s, Boss) and getattr(s, 'type', '') == 'boss':
-                        suspicious.append((s.__class__.__name__, id(s), getattr(s, 'health', None), getattr(s, 'type', None), getattr(s, 'name', None)))
-                except Exception:
-                    pass
-            if suspicious:
-                try:
-                    print(f"DEBUG: post_update_boss_check - found suspicious boss-like enemies: {suspicious}; skipping VICTORY")
-                except Exception:
-                    pass
-                try:
-                    game.victory_pending = False
-                except Exception:
-                    pass
-                return
-        except Exception:
-            pass
+        # Không còn boss sống → kiểm tra nguyên nhân
+        delay = getattr(game, 'victory_delay_ms', VICTORY_DELAY_MS)
 
-        # No alive bosses found: either start the pending timer or finalize if enough time passed
-        try:
-            # ensure we have a default delay
-            delay = getattr(game, 'victory_delay_ms', 300)
-            if not getattr(game, 'victory_pending', False):
-                # start pending window only if the boss was recently killed by the player
-                try:
-                    last_killed = getattr(game, 'boss_just_killed_at', 0)
-                    # allow some leeway: consider recent kills within a few multiples of the delay
-                    allowed_window = getattr(game, 'victory_delay_ms', 800) * 5
-                    if last_killed and (now - last_killed) <= allowed_window:
-                        try:
-                            game.victory_pending = True
-                            game.victory_pending_at = now
-                        except Exception:
-                            game.victory_pending = True
-                            game.victory_pending_at = now
-                        try:
-                            print("DEBUG: No Boss instances remain after player kill - scheduling VICTORY (pending)")
-                        except Exception:
-                            pass
-                    else:
-                        # likely the boss expired naturally (blink timeout) — do not grant victory
-                        try:
-                            print("DEBUG: No Boss instances remain but no recent player kill detected; clearing boss state and skipping VICTORY (likely expired)")
-                        except Exception:
-                            pass
-                        try:
-                            game.boss_spawned = False
-                            game.victory_pending = False
-                        except Exception:
-                            pass
-                except Exception:
-                    # fallback: schedule pending if we cannot determine cause
-                    try:
-                        game.victory_pending = True
-                        game.victory_pending_at = now
-                    except Exception:
-                        game.victory_pending = True
-                        game.victory_pending_at = now
-                    try:
-                        print("DEBUG: No Boss instances remain - scheduling VICTORY (pending) [fallback]")
-                    except Exception:
-                        pass
-                return
+        if not getattr(game, 'victory_pending', False):
+            last_killed = getattr(game, 'boss_just_killed_at', 0)
 
-            # finalize victory if the pending window elapsed
-            if now - getattr(game, 'victory_pending_at', 0) >= delay:
-                try:
-                    print("DEBUG: No Boss instances remain (post-update check) - triggering VICTORY state")
-                except Exception:
-                    pass
+            if last_killed == 0:
+                # Không có bằng chứng player giết → boss tự biến mất (hết thời gian, blink timeout...)
+                print("DEBUG: Boss biến mất mà KHÔNG có player kill → KHÔNG THẮNG")
                 game.boss_spawned = False
                 game.victory_pending = False
-                game.game_state = "VICTORY"
-                try:
-                    game.victory_entered_at = pygame.time.get_ticks()
-                except Exception:
-                    game.victory_entered_at = 0
-                # Clear any pending mouse clicks to avoid queued input
-                try:
-                    pygame.event.clear(pygame.MOUSEBUTTONDOWN)
-                    pygame.event.clear(pygame.MOUSEBUTTONUP)
-                except Exception:
-                    pass
-                SoundManager.stop_music()
-        except Exception:
-            pass
-    except Exception:
+                return
+
+            if (now - last_killed) <= VICTORY_ALLOWED_WINDOW_MS:
+                # Player thực sự giết boss gần đây → bắt đầu đếm delay
+                game.victory_pending = True
+                game.victory_pending_at = now
+                print("DEBUG: Player đã giết boss → bắt đầu đếm delay VICTORY")
+            else:
+                # Quá lâu từ lúc giết → coi như boss cũ đã hết hạn
+                print("DEBUG: Boss chết quá lâu trước đây → không tính victory")
+                game.boss_spawned = False
+                game.victory_pending = False
+            return
+
+        # Đủ thời gian delay → HIỆN VICTORY
+        if now - game.victory_pending_at >= delay:
+            print("DEBUG: Đủ delay → TRIGGER VICTORY!")
+            game.game_state = "VICTORY"
+            game.victory_pending = False
+            game.boss_spawned = False
+            game.victory_entered_at = now
+
+            # Xóa input click thừa tránh click nhầm về menu
+            pygame.event.clear(pygame.MOUSEBUTTONDOWN)
+            pygame.event.clear(pygame.MOUSEBUTTONUP)
+
+            SoundManager.stop_music()
+
+    except Exception as e:
+        print(f"DEBUG: post_update_boss_check error: {e}")
         pass

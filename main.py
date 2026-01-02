@@ -13,7 +13,7 @@ from events import EventHandler
 from sounds import SoundManager
 from enemy import Enemy, Monster2, load_enemy_sprites
 from boss import Boss ,BossBullet, PoisonPool, Laser, Web
-from game_logic import handle_bullet_enemy_collisions, maybe_spawn_boss, post_update_boss_check
+from game_logic import handle_bullet_enemy_collisions, maybe_spawn_boss, post_update_boss_check, process_enemy_death
 from camera import Camera
 from maps.map_manager import MapManager
 from maps import trainingmap
@@ -251,6 +251,23 @@ class Game:
         self.bullets.empty()
         self.enemies.empty()
         self.npcs.empty()
+        # clear boss-related attack groups so residual projectiles/effects do not persist across runs
+        try:
+            self.boss_bullets.empty()
+        except Exception:
+            pass
+        try:
+            self.poison_pools.empty()
+        except Exception:
+            pass
+        try:
+            self.lasers.empty()
+        except Exception:
+            pass
+        try:
+            self.webs.empty()
+        except Exception:
+            pass
         try:
             self.gates.empty()
         except Exception:
@@ -364,12 +381,25 @@ class Game:
         except Exception:
             pass
         self.all_sprites.add(self.player)
+        # ensure player state fully reset (remove lingering invincibility/hit timers)
+        try:
+            self.player.invincible = False
+        except Exception:
+            pass
+        try:
+            self.player.hit_timer = 0
+        except Exception:
+            pass
+        try:
+            self.player.frozen_until = 0
+        except Exception:
+            pass
         print(f"DEBUG: player added to all_sprites, player exists: {self.player is not None}")
                 # Tạo SkillManager chỉ khi chơi thật (không phải tutorial/training)
         if not tutorial:
             try:
-                # SkillManager currently expects (player, all_sprites, enemies)
-                self.skill_manager = SkillManager(self.player, self.all_sprites, self.enemies)
+                # SkillManager expects (game, player, all_sprites, enemies)
+                self.skill_manager = SkillManager(self, self.player, self.all_sprites, self.enemies)
                 print(f"DEBUG: skill_manager created: {self.skill_manager is not None}")
             except Exception as e:
                 print(f"DEBUG: failed to create skill_manager: {e}")
@@ -534,7 +564,13 @@ class Game:
             pass
     def trigger_hit_effect(self):
         """Gọi hàm này mỗi khi bị quái chạm"""
-        self.hit_timer = pygame.time.get_ticks()
+        now = pygame.time.get_ticks()
+        self.hit_timer = now
+        # also set player's hit_timer so the short invulnerability window applies consistently
+        try:
+            self.player.hit_timer = now
+        except Exception:
+            pass
     def update(self):
         if self.game_state != "PLAYING":
             return
@@ -572,12 +608,7 @@ class Game:
         if self.spawn_timer >= SPAWN_DELAY:
             self.spawn_timer = 0
             if not getattr(self, "tutorial_mode", False) and len(self.enemies) < 5:
-                self.spawn_enemy()
-            # không spawn enemy khi đang tutorial
-            if not getattr(self, "tutorial_mode", False):
-                self.spawn_enemy()   # gọi helper
-
-           
+                self.spawn_enemy()         
 
         # Boss spawn logic extracted to game_logic
         try:
@@ -831,23 +862,90 @@ class Game:
         
         hits = pygame.sprite.spritecollide(self.player, self.enemies, False)
         for enemy in hits:
-            for enemy in hits:
-            # Luôn nhấp nháy đỏ khi bị chạm
-                self.player.hit_timer = pygame.time.get_ticks()
-                self.trigger_hit_effect()
+            # debug trace collision
+            try:
+                print(f"DEBUG: Collision with {enemy.__class__.__name__} invincible={getattr(self.player,'invincible',False)} player_hit_timer={getattr(self.player,'hit_timer',0)} game_hit_timer={getattr(self,'hit_timer',0)} health_before={getattr(self.player,'health',None)}")
+            except Exception:
+                pass
+
+            self.trigger_hit_effect()
+
+            # Respect short invulnerability after being hit (flash window)
+            try:
+                if is_invincible:
+                    try:
+                        print("DEBUG: Skipping collision damage due to short invulnerability window")
+                    except Exception:
+                        pass
+                    continue
+            except Exception:
+                pass
 
             # Nếu player đang bất tử (từ skill shield/invincibility)
             if getattr(self.player, 'invincible', False):
-                enemy.kill()                    # quái thường chết ngay
+                # For normal enemies, invincible player still instantly kills them.
+                # For Boss, do NOT call process_enemy_death() (that would mark boss as slain even
+                # if it still has HP). Instead, apply a modest damage so boss must be
+                # truly reduced to 0 HP to trigger victory.
+                if isinstance(enemy, Boss):
+                    try:
+                        enemy.take_damage(5)  # Boss.take_damage multiplies by 2 internally
+                    except Exception:
+                        pass
+                else:
+                    try:
+                        process_enemy_death(self, enemy)
+                    except Exception:
+                        try:
+                            enemy.kill()
+                        except Exception:
+                            pass
                 continue                        # không trừ máu, không phát sound
 
             # Không bất tử → nhận damage bình thường
             SoundManager.play_hurt_sound()
             if getattr(enemy, "type", "") == "boss":
-                self.player.health -= 20            # boss gây nhiều damage hơn
+                # Boss: damage the player and apply a small damage to boss instead of
+                # marking it killed immediately. Only process death if boss HP <= 0.
+                try:
+                    self.player.health -= 10            # boss gây nhiều damage hơn
+                except Exception:
+                    pass
+                try:
+                    enemy.take_damage(1)  # small contact damage (take_damage multiplies by 2)
+                except Exception:
+                    pass
+                # If boss actually died due to this contact, ensure centralized handling runs
+                try:
+                    died = False
+                    if hasattr(enemy, 'health'):
+                        died = enemy.health <= 0
+                    elif hasattr(enemy, 'hp'):
+                        died = enemy.hp <= 0
+                    else:
+                        died = not enemy.alive()
+                    if died:
+                        process_enemy_death(self, enemy)
+                except Exception:
+                    pass
             else:
-                self.player.health -= 10
-            enemy.kill()
+                # Normal enemies: damage the player and then kill the enemy
+                try:
+                    self.player.health -= 10
+                except Exception:
+                    pass
+                try:
+                    process_enemy_death(self, enemy)
+                except Exception:
+                    try:
+                        enemy.kill()
+                    except Exception:
+                        pass
+            # debug health after collision
+            try:
+                print(f"DEBUG: post-collision health={getattr(self.player,'health',None)}")
+            except Exception:
+                pass
            
         # Nếu đang ở tutorial, kiểm tra điều kiện hoàn thành: player đi tới gần mép phải map
         if getattr(self, "tutorial_mode", False) and self.player is not None:
@@ -936,50 +1034,30 @@ class Game:
         self.screen.fill((30, 30, 30))
 
         # 1) draw map
-        try:
-            self.map_manager.draw(self.screen, self.camera)
-        except Exception:
-            pass
+        
+        self.map_manager.draw(self.screen, self.camera)
+        
 
         # 2) Vẽ Túi máu (Dưới chân Player)
         for item in self.heal_items:
-            if self.skill_manager:
-            # MagicBall và các effect khác
-                for effect in getattr(self.skill_manager, 'effects', []):
-                    try:
-                        draw_rect = self.camera.apply(effect.rect)
-                        self.screen.blit(effect.image, draw_rect)
-                    except:
-                        pass
-            # Barrage bullets (skill 4)
-                for bullet in getattr(self.skill_manager, 'barrage_bullets', []):
-                    try:
-                        draw_rect = self.camera.apply(bullet.rect)
-                        self.screen.blit(bullet.image, draw_rect)
-                    except:
-                        pass
-            try:
-                self.screen.blit(item.image, self.camera.apply(item.rect))
-            except Exception:
-                try:
-                    self.screen.blit(item.image, item.rect)
-                except Exception:
-                    pass
-
-        # 3) draw bullets (trước player để layering)
+            self.screen.blit(item.image, self.camera.apply(item.rect))
+        
+        # 3. Player bullets
         for b in self.bullets:
-            try:
-                draw_rect = self.camera.apply(b.rect) if self.camera else b.rect
-            except Exception:
-                draw_rect = b.rect
-            try:
-                self.screen.blit(b.image, draw_rect)
-            except Exception:
-                pass
+            draw_rect = self.camera.apply(b.rect)
+            self.screen.blit(b.image, draw_rect)
+        # 4. SKILL EFFECTS (Barrage + MagicBall - TRƯỚC all_sprites)
+        if self.skill_manager:
+            # Effects (shield/balls)
+            for effect in getattr(self.skill_manager, 'effects', []):
+                draw_rect = self.camera.apply(effect.rect)
+                self.screen.blit(effect.image, draw_rect)
+            # Barrage bullets
+            for bullet in getattr(self.skill_manager, 'barrage_bullets', []):
+                draw_rect = self.camera.apply(bullet.rect)
+                self.screen.blit(bullet.image, draw_rect)
 
-        # debug overlay removed: no on-screen bullet count or debug rectangles
-
-        # 4) draw sprites with camera
+        # 5) draw sprites with camera
         for s in self.all_sprites:
             try:
                 draw_rect = self.camera.apply(s.rect) if self.camera else s.rect
@@ -1344,6 +1422,9 @@ class Game:
             print(f"DEBUG: Boss spawned, boss_spawned set = True health={getattr(boss,'health',None)} max_health={getattr(boss,'max_health',None)} boss_persistent_health={getattr(self,'boss_persistent_health',None)}")
         except Exception:
             pass
+        # Cuối hàm spawn_boss() trong main.py
+        self.last_boss_time = pygame.time.get_ticks()
+        self.boss_spawned = True
 
 if __name__ == "__main__":
     g = Game()

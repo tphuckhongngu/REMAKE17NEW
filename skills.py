@@ -5,6 +5,7 @@ import os
 import math
 from settings import WIDTH, HEIGHT, FPS
 from sounds import SoundManager
+from game_logic import process_enemy_death
 
 SKILLS_DIR = os.path.join(os.path.dirname(__file__), "skills")
 
@@ -231,3 +232,16 @@ class SkillManager:
                 if hasattr(enemy, 'take_damage'):
                     damage = 15 if enemy.__class__.__name__ == 'Boss' else 30
                     enemy.take_damage(damage)
+                    # if this kill path killed the enemy directly, ensure centralized death processing
+                    try:
+                        died = False
+                        if hasattr(enemy, 'health'):
+                            died = enemy.health <= 0
+                        elif hasattr(enemy, 'hp'):
+                            died = enemy.hp <= 0
+                        else:
+                            died = not enemy.alive()
+                        if died:
+                            process_enemy_death(self.game, enemy)
+                    except Exception:
+                        pass
