@@ -22,7 +22,7 @@ def handle_bullet_enemy_collisions(game):
                 if (enemy.__class__.__name__ == 'Boss' and
                         game.skill_manager and
                         game.skill_manager.is_boss_damage_boosted()):
-                    dmg += 5
+                    dmg += 1
             except Exception:
                 pass
 

@@ -607,7 +607,7 @@ class Game:
         self.spawn_timer += 1
         if self.spawn_timer >= SPAWN_DELAY:
             self.spawn_timer = 0
-            if not getattr(self, "tutorial_mode", False) and len(self.enemies) < 5:
+            if not getattr(self, "tutorial_mode", False) and len(self.enemies) < 8:
                 self.spawn_enemy()         
 
         # Boss spawn logic extracted to game_logic
