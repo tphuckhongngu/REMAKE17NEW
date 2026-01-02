@@ -355,7 +355,7 @@ class SkillManager:
         self.effects.add(effect)
         self.all_sprites.add(effect)
     def activate_skill_4(self):
-            SoundManager.play_barrage_sound()
+        SoundManager.play_barrage_sound()
         # Explosion position: try player center, otherwise center of screen
         try:
             pos = self.player.rect.center
