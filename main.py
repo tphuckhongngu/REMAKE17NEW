@@ -1385,7 +1385,7 @@ class Game:
         boss.type = 'boss'
         
         # Khôi phục máu cũ nếu có (Persistent Health)
-        boss.max_health = getattr(boss, 'max_health', 150) # Tăng máu boss cho xứng tầm
+        boss.max_health = getattr(boss, 'max_health', 100) # Tăng máu boss cho xứng tầm
         boss.health = getattr(self, 'boss_persistent_health', boss.max_health)
         
         self.enemies.add(boss)

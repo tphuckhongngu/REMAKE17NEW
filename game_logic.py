@@ -83,7 +83,7 @@ def maybe_spawn_boss(game):
         if current_score - game.last_boss_score >= 100:
             if not any(isinstance(e, Boss) for e in game.enemies):
                 game.spawn_boss()
-            game.last_boss_score += 150
+            game.last_boss_score += 100
 
     except Exception:
         pass
